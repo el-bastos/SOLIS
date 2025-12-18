@@ -1,0 +1,21 @@
+# SOLIS Requirements
+# Python 3.10-3.13 required (Numba does NOT support 3.14+)
+# Last updated: 2025-12-02
+
+# GUI Framework
+PyQt6>=6.6.0
+
+# Scientific Computing
+numpy>=1.24.0
+scipy>=1.11.0
+pandas>=2.0.0
+
+# Plotting
+matplotlib>=3.7.0
+
+# Performance (REQUIRED for heterogeneous analysis)
+# Numba works on: Windows, Linux, macOS (Intel and Apple Silicon M1/M2/M3)
+numba>=0.58.0
+
+# Development (optional - uncomment for building)
+# pyinstaller>=6.0.0

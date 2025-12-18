@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg width="100%" height="100%" viewBox="0 0 24 24" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" xmlns:serif="http://www.serif.com/" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:1.5;">
+    <g transform="matrix(0.025,0,0,0.025,0,24)">
+        <path d="M200,-120C178,-120 159.167,-127.833 143.5,-143.5C127.833,-159.167 120,-178 120,-200L120,-760C120,-782 127.833,-800.833 143.5,-816.5C159.167,-832.167 178,-840 200,-840L760,-840C782,-840 800.833,-832.167 816.5,-816.5C832.167,-800.833 840,-782 840,-760L840,-200C840,-178 832.167,-159.167 816.5,-143.5C800.833,-127.833 782,-120 760,-120L200,-120Z" style="fill:rgb(129,209,213);fill-rule:nonzero;"/>
+    </g>
+    <g>
+        <path d="M4.705,19.186C4.701,19.183 4.67,19.074 4.727,18.906C5.527,14.557 5.781,11.077 6.788,10.988C7.593,11.096 7.706,12.291 8.9,12.225C10.101,11.997 10.505,3.941 11.68,4.174C12.425,4.322 12.753,11.909 14.366,11.709C15.412,11.782 15.476,7.164 16.358,7.489C16.985,7.033 17.476,10.908 19.63,18.536" style="fill:none;stroke:rgb(0,12,105);stroke-width:1.5px;"/>
+        <g transform="matrix(1,0,0,1,-5.341737,3.1584)">
+            <circle cx="10" cy="16" r="1" style="fill:white;stroke:black;stroke-width:0.8px;"/>
+        </g>
+        <g transform="matrix(1,0,0,1,-3.395935,-5.059407)">
+            <circle cx="10" cy="16" r="1" style="fill:white;stroke:black;stroke-width:0.8px;"/>
+        </g>
+        <g transform="matrix(1,0,0,1,-0.825707,-3.268808)">
+            <circle cx="10" cy="16" r="1" style="fill:white;stroke:black;stroke-width:0.8px;"/>
+        </g>
+        <g transform="matrix(1,0,0,1,1.421542,-11.365691)">
+            <circle cx="10" cy="16" r="1" style="fill:white;stroke:black;stroke-width:0.8px;"/>
+        </g>
+        <g transform="matrix(1,0,0,1,4.238441,-4.295797)">
+            <circle cx="10" cy="16" r="1" style="fill:white;stroke:black;stroke-width:0.8px;"/>
+        </g>
+        <g transform="matrix(1,0,0,1,6.37269,-8.429591)">
+            <circle cx="10" cy="16" r="1" style="fill:white;stroke:black;stroke-width:0.8px;"/>
+        </g>
+        <g transform="matrix(1,0,0,1,9.400947,2.731551)">
+            <circle cx="10" cy="16" r="1" style="fill:white;stroke:black;stroke-width:0.8px;"/>
+        </g>
+    </g>
+</svg>

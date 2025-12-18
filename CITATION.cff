@@ -1,0 +1,27 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "SOLIS: Singlet Oxygen Luminescence Investigation System"
+version: 1.0.0
+date-released: 2025-01-01
+authors:
+  - family-names: "Bastos"
+    given-names: "Erick Leite"
+    email: "elbastos@iq.usp.br"
+    affiliation: "Instituto de Química, Universidade de São Paulo"
+    orcid: "https://orcid.org/0000-0002-0592-9455"
+repository-code: "https://github.com/el-bastos/SOLIS"
+keywords:
+  - "singlet oxygen"
+  - "luminescence"
+  - "kinetics"
+  - "photochemistry"
+  - "data analysis"
+  - "PyQt6"
+license: "CC-BY-NC-4.0"
+abstract: >
+  SOLIS (Singlet Oxygen Luminescence Investigation System) is a comprehensive
+  PyQt6-based GUI application for analyzing singlet oxygen decay kinetics data.
+  It supports both homogeneous and heterogeneous analysis methods, including
+  vesicle diffusion models and surplus analysis. Features include Numba-accelerated
+  computations, interactive plotting, session management, and multiplatform support.

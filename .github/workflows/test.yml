@@ -1,0 +1,68 @@
+name: Test SOLIS
+
+on:
+  push:
+    branches: [ master, main, develop ]
+  pull_request:
+    branches: [ master, main ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.13']
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install system dependencies (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libxcb-xinerama0 libxcb-cursor0 libxkbcommon-x11-0 libegl1 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 xvfb
+        # Set up virtual display for headless PyQt6
+        echo "QT_QPA_PLATFORM=offscreen" >> $GITHUB_ENV
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-qt pytest-cov
+
+    - name: Lint with flake8
+      run: |
+        pip install flake8
+        # Stop the build if there are Python syntax errors or undefined names
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude=venv,build,dist
+        # Exit-zero treats all errors as warnings
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics --exclude=venv,build,dist
+
+    - name: Check imports
+      run: |
+        python -c "import PyQt6; print('PyQt6 OK')"
+        python -c "import numpy; print('numpy OK')"
+        python -c "import scipy; print('scipy OK')"
+        python -c "import pandas; print('pandas OK')"
+        python -c "import matplotlib; print('matplotlib OK')"
+        python -c "import numba; print('numba OK')"
+
+    - name: Test imports from main modules
+      run: |
+        python -c "from core import kinetics_analyzer; print('core imports OK')"
+        python -c "from heterogeneous import diffusion_simulator_numba; print('heterogeneous imports OK')"
+        python -c "from gui import splash_screen; print('gui imports OK')"
+        python -c "from utils import session_manager; print('utils imports OK')"
+
+    - name: Verify Numba compilation
+      run: |
+        python -c "from heterogeneous.diffusion_simulator_numba import DiffusionSimulatorNumba; print('Numba simulator OK')"

@@ -1,0 +1,34 @@
+{
+  "title": "SOLIS Help",
+  "version": "1.0.0",
+  "sections": [
+    {
+      "title": "Getting Started",
+      "content": "Welcome to SOLIS (Singlet Oxygen Luminescence Investigation System)!\n\n1. **Load Data**: Use File → Open Folder to select a directory containing your decay files\n2. **Select Compounds**: Check the compounds you want to analyze in the Data Browser\n3. **Run Analysis**: Choose Analysis → Homogeneous → Kinetics and QY\n4. **View Results**: Results appear in the browser tabs (Kinetics, Statistics, Quantum Yield)\n5. **Generate Plots**: Right-click compounds or results to create plots"
+    },
+    {
+      "title": "File Menu",
+      "content": "**Open Folder**: Load data files from a directory\n\n**Save Session**: Save your current work (data, results, plots, settings) to a .solis.json file\n\n**Load Session**: Restore a previously saved session\n\n**Export Results**: Export kinetics results and statistics to CSV files\n\n**Reset Session**: Clear all data and start fresh"
+    },
+    {
+      "title": "Analysis Types",
+      "content": "**Homogeneous Analysis**:\n• Kinetics and QY: Analyze homogeneous decay kinetics and calculate quantum yields\n• Linearity Check: Study variation of α with absorption or excitation intensity\n\n**Heterogeneous (Vesicle) Analysis**:\n• 3-exponential fit for heterogeneous systems with lipid/water compartments\n• Grid search optimization for τ_Δ(water) and τ_Δ(lipid)\n\n**Surplus Analysis**:\n• 4-step method for heterogeneous systems\n• Can run automatically after homogeneous analysis"
+    },
+    {
+      "title": "File Naming Convention",
+      "content": "**Decay Files**:\nDecay_[Compound]_EX[λ]nm_tauD[value]_QY[value]_QYsd[sd]_EI[value][unit].csv\n\nExample:\nDecay_TMPyP_EX400nm_tauD3.5_QY0.98_QYsd0.08.csv\n\n**Absorption Files**:\nAbs_[Compound].csv\n\nExample:\nAbs_TMPyP.csv"
+    },
+    {
+      "title": "SNR Thresholds",
+      "content": "Signal-to-Noise Ratio (SNR) thresholds determine data quality:\n\n• **Homogeneous**: Default 5:1 (moderate quality required)\n• **Heterogeneous**: Default 50:1 (high quality required for 3-exponential fit)\n\nYou can adjust these in Preferences → SNR Thresholds.\n\nSNR is always displayed as a ratio (e.g., 52.6:1), not in dB."
+    },
+    {
+      "title": "Keyboard Shortcuts",
+      "content": "**File Menu**:\n• Ctrl+O: Open Folder\n• Ctrl+S: Save Session\n• Ctrl+Shift+O: Load Session\n• Ctrl+E: Export Results\n• Ctrl+R: Reset Session\n• Ctrl+Q: Exit\n\n**Analysis Menu**:\n• Ctrl+H: Homogeneous Kinetics and QY\n• Ctrl+L: Linearity Check\n• Ctrl+V: Heterogeneous (Vesicle) Analysis"
+    },
+    {
+      "title": "About SOLIS",
+      "content": "SOLIS - Singlet Oxygen Luminescence Investigation System\n\n**Version**: Beta (Ready for public release)\n**License**: CC BY-NC 4.0 (Non-commercial)\n**Language**: Python 3.10+ (PyQt6)\n\n**Features**:\n✓ Homogeneous decay kinetics analysis\n✓ Quantum yield calculations (A-based method)\n✓ Heterogeneous (vesicle) analysis with grid search\n✓ Surplus analysis for heterogeneous systems\n✓ Linearity checks (Beer-Lambert, Excitation Intensity)\n✓ Advanced spike detection and masking\n✓ Session save/load with full state preservation\n✓ Absorption spectrum plotting\n✓ Publication-quality matplotlib plots\n\n**Documentation**: See README.md and docs/ folder\n**GitHub**: [Add repository URL here]"
+    }
+  ]
+}

@@ -1,0 +1,149 @@
+name: Build SOLIS
+
+on:
+  push:
+    branches: [ master, main, develop ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ master, main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller
+
+    - name: Build with PyInstaller
+      run: |
+        pyinstaller solis.spec
+
+    - name: Upload Windows artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: SOLIS-Windows
+        path: dist/SOLIS/
+        retention-days: 30
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller
+
+    - name: Build with PyInstaller
+      run: |
+        pyinstaller solis.spec
+
+    - name: Create DMG
+      run: |
+        hdiutil create -volname "SOLIS" -srcfolder dist/SOLIS.app -ov -format UDZO dist/SOLIS-macOS.dmg
+
+    - name: Upload macOS artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: SOLIS-macOS
+        path: dist/SOLIS-macOS.dmg
+        retention-days: 30
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libxcb-xinerama0 libxcb-cursor0 libxkbcommon-x11-0 libegl1 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0
+        echo "QT_QPA_PLATFORM=offscreen" >> $GITHUB_ENV
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller
+
+    - name: Build with PyInstaller
+      run: |
+        pyinstaller solis.spec
+
+    - name: Create tarball
+      run: |
+        cd dist
+        tar -czf SOLIS-Linux.tar.gz SOLIS/
+
+    - name: Upload Linux artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: SOLIS-Linux
+        path: dist/SOLIS-Linux.tar.gz
+        retention-days: 30
+
+  release:
+    needs: [build-windows, build-macos, build-linux]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+
+    - name: List downloaded artifacts
+      run: |
+        echo "=== Downloaded artifacts ==="
+        find . -type f -name "*" | head -50
+        ls -la
+
+    - name: Prepare release files
+      run: |
+        mkdir -p release
+        # Windows: zip the folder
+        cd SOLIS-Windows && zip -r ../release/SOLIS-Windows.zip . && cd ..
+        # macOS: copy DMG
+        cp SOLIS-macOS/SOLIS-macOS.dmg release/ 2>/dev/null || cp SOLIS-macOS/*.dmg release/ 2>/dev/null || echo "No macOS DMG found"
+        # Linux: copy tarball
+        cp SOLIS-Linux/SOLIS-Linux.tar.gz release/ 2>/dev/null || cp SOLIS-Linux/*.tar.gz release/ 2>/dev/null || echo "No Linux tarball found"
+        echo "=== Release files ==="
+        ls -la release/
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: release/*
+        draft: false
+        prerelease: true
+        generate_release_notes: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

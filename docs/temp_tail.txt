@@ -1,0 +1,100 @@
+**Error:** `NameError: name 'QDialog' is not defined` when running heterogeneous analysis
+
+**Fix:** Added QDialog to PyQt6.QtWidgets imports (line 11 in solis_gui.py)
+
+#### Issue 3: Missing Physical Parameters ✅ (Commit: dad3799)
+**Problem:** All fixed physical/geometry parameters were hardcoded with no way to configure them.
+
+**Fix:** Added 'heterogeneous' section to preferences with all diffusion/geometry parameters:
+- D_water_cm2s, D_lipid_cm2s, tau_delta_lipid_us, partition_coeff
+- n_layers, membrane_start, membrane_end, ps_layers
+- time_step_us, output_time_step_us
+
+#### Issue 4: PreferencesDialog KeyError ✅ (Commit: 1b7aaa0)
+**Error:** `KeyError: 'heterogeneous_vesicle'` when opening Preferences
+
+**Fix:** Restored 'heterogeneous_vesicle' section in preferences with all old parameter names to match PreferencesDialog expectations.
+
+#### Issue 5: Mixing Old and New Code ✅ (Commit: 8ee3069)
+**Problem:** User correctly identified that old failed implementation was being mixed with new working code. Parameters were split between preferences and dialog, causing confusion.
+
+**Complete cleanup:**
+
+1. **HeterogeneousDialog - Added 3 tabs:**
+   - Tab 1 (Fitting): Preset, fit range, grid search, advanced options
+   - Tab 2 (Physical Parameters): D_water, D_lipid, tau_delta_lipid, partition_coeff
+   - Tab 3 (Geometry): n_layers, membrane_start/end, PS layers
+   - get_parameters() returns ALL 18 parameters from all tabs
+
+2. **Removed ALL old code:**
+   - Deleted heterogeneous_vesicle section from preferences (solis_gui.py)
+   - Removed 133 lines from PreferencesDialog (preferences_dialog.py)
+   - Removed heterogeneous_vesicle from get_settings() and _reset_defaults()
+
+3. **Updated analysis workflow:**
+   - _execute_vesicle_analysis gets ALL params from dialog (not preferences)
+   - Creates VesicleGeometry and DiffusionParameters from dialog params
+   - Zero mixing with old code - pure Numba implementation only
+
+#### Issue 6: Result Attribute Name Mismatch ✅ (Commit: 1f17545)
+**Error:** `AttributeError: 'HeterogeneousFitResult' object has no attribute 'tau_T_us'` when displaying results
+
+**Fix:** Updated integrated_browser_widget.py to use new dataclass attributes:
+- tau_T_us → tau_T
+- tau_w_us → tau_delta_water
+- tau_L_us → parameters.tau_delta_lipid
+- A → amplitude_lipid, B → amplitude_water, C → background
+- chi2_reduced → reduced_chi_square
+
+### Final Implementation
+
+**Heterogeneous Analysis Dialog (3 Tabs):**
+
+Tab 1 - Fitting Parameters:
+- Preset: fast (~3 min), medium (~15 min), slow (~90 min)
+- Fit range: start/end time
+- Grid search: τ_T range, τ_w range, grid points
+- Advanced: background weight, max iterations
+
+Tab 2 - Physical Parameters:
+- D_water: 2.0×10⁻⁵ cm²/s
+- D_lipid: 1.0×10⁻⁵ cm²/s
+- τ_Δ,lipid: 14.0 μs (fixed)
+- Partition coeff (S): 3.5
+- Based on Hackbarth & Röder 2015
+
+Tab 3 - Geometry (78 nm SUV):
+- Total layers: 400
+- Membrane start: 36, end: 39
+- PS layers: 37, 38
+- Layer structure info displayed
+
+**Workflow:**
+1. Menu: Analyze → Heterogeneous Diffusion Analysis
+2. Dialog opens with 3 tabs - configure all parameters
+3. Click OK - all 18 parameters sent to analysis
+4. Worker thread runs HeterogeneousFitter with Numba (161× speedup)
+5. Results displayed in Tab 5 with correct attribute names
+6. View Plots button shows fit curves and chi-square landscape
+
+### Files Modified
+- variable_study_plotter.py - Fixed r2 variable extraction
+- solis_gui.py - QDialog import, removed preferences, dialog integration
+- heterogeneous_dialog.py - 3-tab interface with all parameters
+- preferences_dialog.py - Removed heterogeneous section (133 lines)
+- integrated_browser_widget.py - Fixed result attribute names
+
+### Commits
+1. 67819fb - Fix undefined variable error in matplotlib linearity plots
+2. dad3799 - Fix heterogeneous analysis: add QDialog import and physical parameters
+3. 1b7aaa0 - Fix preferences crash: restore heterogeneous_vesicle section
+4. 8ee3069 - Clean implementation: ALL heterogeneous parameters in dialog tabs
+5. 1f17545 - Fix attribute names for new HeterogeneousFitResult dataclass
+
+### Performance Note
+First run includes Numba JIT compilation time (~30s overhead). Subsequent runs use compiled code and should match standalone version speed (~15 min for medium preset).
+
+### Status
+✅ COMPLETE - Heterogeneous analysis fully integrated with clean Numba-only implementation. All parameters in dialog, no old code remaining, results display correctly.
+
+---

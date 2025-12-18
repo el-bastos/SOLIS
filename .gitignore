@@ -1,0 +1,111 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+venv_old/
+ENV/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Data files (optional - uncomment if you don't want to track data)
+# data/
+# *.csv
+# *.txt
+
+# Logs
+*.log
+
+# Exports
+exports/
+csv_exports/
+*.pdf
+
+# Backups
+*_backup_*/
+SOLIS_BACKUP_*/
+
+# PyInstaller build artifacts
+build/
+dist/
+*.exe
+*.app
+*.AppImage
+*.dmg
+*.deb
+*.rpm
+
+# Session files (large files - ignored to prevent GitHub warnings)
+*.solis.json
+
+# Temporary test files
+test_*.png
+*_debug*.png
+*_test*.md
+SESSION_*_SUMMARY.md
+SESSION_*_FINAL_STATUS.md
+FIXES_READY_TO_TEST.md
+TEST_*.md
+
+# Windows specific
+desktop.ini
+nul
+
+# AI assistant local files
+.claude/
+claude_session_guide.md
+CLAUDE_SESSION_GUIDE.md
+
+# Development folders (local only)
+old/
+todos/
+docs/sessions/
+docs/archive/
+docs/MEMORY.md
+docs/CODEBASE_ANALYSIS_2025-11-02.md
+docs/DOCUMENTATION_REORGANIZATION_2025-11-08.md
+docs/ROOT_CLEANUP_ANALYSIS.md
+
+# Build scripts are needed - don't ignore
+!build_scripts/*.bat
+!build_scripts/*.ps1
+
+# Ignore other .bat and .ps1 files
+/*.bat
+/*.ps1
+
+# Temporary equality file
+=*
+desktop.ini

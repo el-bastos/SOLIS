@@ -1,0 +1,35 @@
+{
+  "title": "SOLIS: Singlet Oxygen Luminescence Investigation System",
+  "description": "A comprehensive PyQt6-based GUI application for analyzing singlet oxygen decay kinetics data from time-resolved near-infrared luminescence measurements. Supports homogeneous and heterogeneous analysis methods with Numba-accelerated computations.",
+  "version": "1.0.0",
+  "upload_type": "software",
+  "access_right": "open",
+  "license": "CC-BY-NC-4.0",
+  "creators": [
+    {
+      "name": "Bastos, Erick Leite",
+      "affiliation": "Instituto de Química, Universidade de São Paulo",
+      "orcid": "0000-0002-0592-9455"
+    }
+  ],
+  "keywords": [
+    "singlet oxygen",
+    "luminescence",
+    "kinetics",
+    "photochemistry",
+    "data analysis",
+    "PyQt6",
+    "time-resolved spectroscopy",
+    "vesicle diffusion",
+    "heterogeneous analysis"
+  ],
+  "related_identifiers": [
+    {
+      "relation": "isSupplementTo",
+      "identifier": "https://github.com/el-bastos/SOLIS"
+    }
+  ],
+  "contributors": [],
+  "language": "eng",
+  "grants": []
+}
