@@ -87,6 +87,18 @@ class PlotViewerWidget(QWidget):
         export_pdf_action.triggered.connect(self._export_pdf)
         toolbar.addAction(export_pdf_action)
 
+        # Export SVG
+        export_svg_action = QAction("Export SVG", self)
+        export_svg_action.setToolTip("Export plot as vector SVG")
+        export_svg_action.triggered.connect(self._export_svg)
+        toolbar.addAction(export_svg_action)
+
+        # Export PNG
+        export_png_action = QAction("Export PNG", self)
+        export_png_action.setToolTip("Export plot as PNG image")
+        export_png_action.triggered.connect(self._export_png)
+        toolbar.addAction(export_png_action)
+
         # Export CSV
         export_csv_action = QAction("Export CSV", self)
         export_csv_action.setToolTip("Export plot data as CSV")
@@ -265,6 +277,54 @@ class PlotViewerWidget(QWidget):
             except Exception as e:
                 logger.error(f"PDF export failed: {e}")
                 QMessageBox.critical(self, "Export Error", f"Failed to export PDF:\n{str(e)}")
+
+    def _export_svg(self):
+        """Export current plot as vector SVG."""
+        if not self.current_fig:
+            QMessageBox.warning(self, "No Plot", "No plot available to export.")
+            return
+
+        safe_title = self.plot_title.replace(":", "_").replace("<", "_").replace(">", "_").replace('"', "_").replace("/", "_").replace("\\", "_").replace("|", "_").replace("?", "_").replace("*", "_")
+
+        filename, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export Plot as SVG",
+            f"{safe_title}.svg",
+            "SVG Files (*.svg)"
+        )
+
+        if filename:
+            try:
+                self.current_fig.savefig(filename, format='svg', bbox_inches='tight')
+                logger.info(f"Plot exported to SVG: {filename}")
+                QMessageBox.information(self, "Export Complete", f"Plot exported to:\n{filename}")
+            except Exception as e:
+                logger.error(f"SVG export failed: {e}")
+                QMessageBox.critical(self, "Export Error", f"Failed to export SVG:\n{str(e)}")
+
+    def _export_png(self):
+        """Export current plot as PNG image."""
+        if not self.current_fig:
+            QMessageBox.warning(self, "No Plot", "No plot available to export.")
+            return
+
+        safe_title = self.plot_title.replace(":", "_").replace("<", "_").replace(">", "_").replace('"', "_").replace("/", "_").replace("\\", "_").replace("|", "_").replace("?", "_").replace("*", "_")
+
+        filename, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export Plot as PNG",
+            f"{safe_title}.png",
+            "PNG Files (*.png)"
+        )
+
+        if filename:
+            try:
+                self.current_fig.savefig(filename, format='png', dpi=300, bbox_inches='tight')
+                logger.info(f"Plot exported to PNG: {filename}")
+                QMessageBox.information(self, "Export Complete", f"Plot exported to:\n{filename}")
+            except Exception as e:
+                logger.error(f"PNG export failed: {e}")
+                QMessageBox.critical(self, "Export Error", f"Failed to export PNG:\n{str(e)}")
 
     def _export_csv(self):
         """Export plot data as CSV."""

@@ -321,6 +321,16 @@ class IntegratedBrowserWidget(QWidget):
                 btn_save_pdf.clicked.connect(lambda: self._export_plot_pdf(fig, plot_data))
                 control_layout.addWidget(btn_save_pdf)
 
+                # Save SVG button
+                btn_save_svg = QPushButton("Save SVG")
+                btn_save_svg.clicked.connect(lambda: self._export_plot_svg(fig, plot_data))
+                control_layout.addWidget(btn_save_svg)
+
+                # Save PNG button
+                btn_save_png = QPushButton("Save PNG")
+                btn_save_png.clicked.connect(lambda: self._export_plot_png(fig, plot_data))
+                control_layout.addWidget(btn_save_png)
+
                 # Log X toggle button (only for decay plots, not absorption)
                 plot_name = plot_data.get('name', '')
                 is_absorption_plot = plot_name.startswith('abs_')
@@ -1752,6 +1762,72 @@ class IntegratedBrowserWidget(QWidget):
                 self,
                 "Export Error",
                 f"Failed to export PDF:\n{e}"
+            )
+
+    def _export_plot_svg(self, fig, plot_data: dict):
+        """Export plot to SVG."""
+        from PyQt6.QtWidgets import QFileDialog
+        import os
+
+        try:
+            plot_name = plot_data.get('name', 'plot')
+            default_filename = f"{plot_name}.svg"
+
+            file_path, _ = QFileDialog.getSaveFileName(
+                self,
+                "Save SVG",
+                default_filename,
+                "SVG Files (*.svg)"
+            )
+
+            if not file_path:
+                return
+
+            fig.savefig(file_path, format='svg', bbox_inches='tight')
+
+            logger.info(f"Plot exported to SVG: {file_path}")
+            self.status_message.emit(f"SVG saved: {os.path.basename(file_path)}")
+
+        except Exception as e:
+            logger.error(f"Failed to export SVG: {e}")
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.critical(
+                self,
+                "Export Error",
+                f"Failed to export SVG:\n{e}"
+            )
+
+    def _export_plot_png(self, fig, plot_data: dict):
+        """Export plot to PNG."""
+        from PyQt6.QtWidgets import QFileDialog
+        import os
+
+        try:
+            plot_name = plot_data.get('name', 'plot')
+            default_filename = f"{plot_name}.png"
+
+            file_path, _ = QFileDialog.getSaveFileName(
+                self,
+                "Save PNG",
+                default_filename,
+                "PNG Files (*.png)"
+            )
+
+            if not file_path:
+                return
+
+            fig.savefig(file_path, format='png', dpi=300, bbox_inches='tight')
+
+            logger.info(f"Plot exported to PNG: {file_path}")
+            self.status_message.emit(f"PNG saved: {os.path.basename(file_path)}")
+
+        except Exception as e:
+            logger.error(f"Failed to export PNG: {e}")
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.critical(
+                self,
+                "Export Error",
+                f"Failed to export PNG:\n{e}"
             )
 
     def _toggle_log_x(self, fig, canvas, checked: bool):

@@ -16,7 +16,7 @@
     },
     {
       "title": "File Naming Convention",
-      "content": "**Decay Files**:\nDecay_[Compound]_EX[λ]nm_tauD[value]_QY[value]_QYsd[sd]_EI[value][unit].csv\n\nExample:\nDecay_TMPyP_EX400nm_tauD3.5_QY0.98_QYsd0.08.csv\n\n**Absorption Files**:\nAbs_[Compound].csv\n\nExample:\nAbs_TMPyP.csv"
+      "content": "**Decay Files**:\nDecay_[Compound]_EX[λ]nm_tauD[value]_QY[value]_QYsd[sd]_EI[value][unit].csv\n\nExample:\nDecay_TMPyP_EX400nm_tauD3.5_QY0.98_QYsd0.08.csv\n\n**Absorption Files**:\nAbs_[Compound].csv\n\nExample:\nAbs_TMPyP.csv\n\n**Fluorescence Emission Files**:\nFL_[Compound].csv\n\nExample:\nFL_TMPyP.csv\n\n**Phosphorescence Emission Files**:\nPh_[Compound].csv\n\nExample:\nPh_TMPyP.csv\n\n**Notes**:\n• [Compound] must match exactly across all file types for the same compound\n• All spectral files (Abs, FL, Ph) use the same CSV format: first column is wavelength (nm), remaining columns are replicate intensities\n• Multiple replicate columns are automatically averaged"
     },
     {
       "title": "SNR Thresholds",
@@ -25,6 +25,10 @@
     {
       "title": "Keyboard Shortcuts",
       "content": "**File Menu**:\n• Ctrl+O: Open Folder\n• Ctrl+S: Save Session\n• Ctrl+Shift+O: Load Session\n• Ctrl+E: Export Results\n• Ctrl+R: Reset Session\n• Ctrl+Q: Exit\n\n**Analysis Menu**:\n• Ctrl+H: Homogeneous Kinetics and QY\n• Ctrl+L: Linearity Check\n• Ctrl+V: Heterogeneous (Vesicle) Analysis"
+    },
+    {
+      "title": "Spectral Overlay Plots",
+      "content": "SOLIS can plot and overlay absorption (Abs), fluorescence (FL), and phosphorescence (Ph) spectra.\n\n**Standalone Plots**:\n• Right-click any Abs, FL, or Ph compound in the browser → **Plot Spectrum** (or **Plot FL Spectrum** / **Plot Ph Spectrum**)\n• Shows raw intensity vs. wavelength for that compound\n\n**Overlay Plots** (normalized 0–1):\n• Right-click an FL compound → **Plot Abs + FL Overlay** (requires a matching Abs file)\n• Right-click a Ph compound → **Plot Abs + Ph Overlay** (requires a matching Abs file)\n• All spectra are normalized to 0–1 on a common y-axis for shape comparison\n\n**Merged Spectra** (multiple compounds):\n• Select multiple FL or Ph compounds (Ctrl+Click), right-click → **Plot Merged FL/Ph Spectra**\n• Overlays all selected spectra in different colors\n\n**Export**:\n• All spectral plots support CSV, PDF, SVG, and PNG export via the tab toolbar"
     },
     {
       "title": "About SOLIS",

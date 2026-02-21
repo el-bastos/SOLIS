@@ -381,6 +381,12 @@ class SOLISMainWindow(QMainWindow):
         self.file_browser.folder_loaded.connect(self._on_folder_loaded)
         self.file_browser.absorption_plot_requested.connect(self._on_absorption_plot_requested)
         self.file_browser.absorption_merged_requested.connect(self._on_absorption_merged_requested)
+        self.file_browser.fl_plot_requested.connect(self._on_fl_plot_requested)
+        self.file_browser.fl_overlay_requested.connect(self._on_fl_overlay_requested)
+        self.file_browser.fl_merged_requested.connect(self._on_fl_merged_requested)
+        self.file_browser.ph_plot_requested.connect(self._on_ph_plot_requested)
+        self.file_browser.ph_overlay_requested.connect(self._on_ph_overlay_requested)
+        self.file_browser.ph_merged_requested.connect(self._on_ph_merged_requested)
         self.file_browser.result_item_clicked.connect(self._on_result_item_clicked)
         self.file_browser.plot_item_clicked.connect(self._on_plot_item_clicked)
 
@@ -2865,6 +2871,149 @@ class SOLISMainWindow(QMainWindow):
                 f"Failed to create merged absorption spectra:\n\n{str(e)}\n\nCheck console for details."
             )
             self.status_label.setText("Merged absorption plot failed")
+
+    # ==================== FL / Ph PLOT HANDLERS ====================
+
+    def _get_spectrum_file(self, compound_name: str, file_type: str):
+        """Return the first ParsedFile of given file_type for compound, or None."""
+        if not self.loaded_compounds or compound_name not in self.loaded_compounds:
+            return None
+        return next(
+            (f for f in self.loaded_compounds[compound_name] if f.file_type == file_type),
+            None
+        )
+
+    def _on_fl_plot_requested(self, compound_name: str):
+        """Plot standalone FL spectrum."""
+        from plotting.solis_plotter import SOLISPlotter
+        fl_file = self._get_spectrum_file(compound_name, 'fluorescence')
+        if not fl_file:
+            logger.warning(f"No FL file for {compound_name}")
+            return
+        self.status_label.setText(f"Creating FL spectrum for {compound_name}...")
+        self._set_busy_cursor()
+        try:
+            fig = SOLISPlotter().plot_fl_spectrum_mpl(fl_file)
+            self._show_plot(f"fl_{compound_name}", f"FL Spectrum - {compound_name}", fig)
+            self._restore_cursor()
+            self.status_label.setText(f"FL spectrum opened: {compound_name}")
+        except Exception as e:
+            self._restore_cursor()
+            logger.error(f"Failed to create FL plot for {compound_name}: {e}", exc_info=True)
+            QMessageBox.critical(self, "Plot Error", f"Failed to create FL spectrum:\n\n{e}")
+            self.status_label.setText("FL plot failed")
+
+    def _on_fl_overlay_requested(self, compound_name: str):
+        """Plot Abs + FL normalized overlay."""
+        from plotting.solis_plotter import SOLISPlotter
+        abs_file = self._get_spectrum_file(compound_name, 'absorption')
+        fl_file = self._get_spectrum_file(compound_name, 'fluorescence')
+        if not fl_file:
+            logger.warning(f"No FL file for {compound_name}")
+            return
+        self.status_label.setText(f"Creating Abs + FL overlay for {compound_name}...")
+        self._set_busy_cursor()
+        try:
+            fig = SOLISPlotter().plot_spectra_overlay_mpl(
+                compound_name, abs_file=abs_file, fl_file=fl_file
+            )
+            self._show_plot(f"fl_overlay_{compound_name}", f"Abs + FL Overlay - {compound_name}", fig)
+            self._restore_cursor()
+            self.status_label.setText(f"Abs + FL overlay opened: {compound_name}")
+        except Exception as e:
+            self._restore_cursor()
+            logger.error(f"Failed to create FL overlay for {compound_name}: {e}", exc_info=True)
+            QMessageBox.critical(self, "Plot Error", f"Failed to create Abs + FL overlay:\n\n{e}")
+            self.status_label.setText("FL overlay failed")
+
+    def _on_fl_merged_requested(self, compound_names: List[str]):
+        """Plot merged FL spectra."""
+        from plotting.solis_plotter import SOLISPlotter
+        fl_files = [self._get_spectrum_file(cn, 'fluorescence') for cn in compound_names]
+        fl_files = [f for f in fl_files if f is not None]
+        if not fl_files:
+            QMessageBox.warning(self, "No Data", "No FL files found for selected compounds.")
+            return
+        self.status_label.setText(f"Creating merged FL plot ({len(fl_files)} compounds)...")
+        self._set_busy_cursor()
+        try:
+            fig = SOLISPlotter().plot_merged_fl_spectra_mpl(fl_files)
+            plot_id = "fl_merged_" + "_".join(compound_names) if len(compound_names) <= 3 else f"fl_merged_{len(fl_files)}"
+            title = "FL Spectra: " + ", ".join(compound_names) if len(compound_names) <= 3 else f"FL Spectra ({len(fl_files)} compounds)"
+            self._show_plot(plot_id, title, fig)
+            self._restore_cursor()
+            self.status_label.setText(f"Merged FL plot opened ({len(fl_files)} compounds)")
+        except Exception as e:
+            self._restore_cursor()
+            logger.error(f"Failed to create merged FL plot: {e}", exc_info=True)
+            QMessageBox.critical(self, "Plot Error", f"Failed to create merged FL spectra:\n\n{e}")
+            self.status_label.setText("Merged FL plot failed")
+
+    def _on_ph_plot_requested(self, compound_name: str):
+        """Plot standalone Ph spectrum."""
+        from plotting.solis_plotter import SOLISPlotter
+        ph_file = self._get_spectrum_file(compound_name, 'phosphorescence')
+        if not ph_file:
+            logger.warning(f"No Ph file for {compound_name}")
+            return
+        self.status_label.setText(f"Creating Ph spectrum for {compound_name}...")
+        self._set_busy_cursor()
+        try:
+            fig = SOLISPlotter().plot_ph_spectrum_mpl(ph_file)
+            self._show_plot(f"ph_{compound_name}", f"Ph Spectrum - {compound_name}", fig)
+            self._restore_cursor()
+            self.status_label.setText(f"Ph spectrum opened: {compound_name}")
+        except Exception as e:
+            self._restore_cursor()
+            logger.error(f"Failed to create Ph plot for {compound_name}: {e}", exc_info=True)
+            QMessageBox.critical(self, "Plot Error", f"Failed to create Ph spectrum:\n\n{e}")
+            self.status_label.setText("Ph plot failed")
+
+    def _on_ph_overlay_requested(self, compound_name: str):
+        """Plot Abs + Ph normalized overlay."""
+        from plotting.solis_plotter import SOLISPlotter
+        abs_file = self._get_spectrum_file(compound_name, 'absorption')
+        ph_file = self._get_spectrum_file(compound_name, 'phosphorescence')
+        if not ph_file:
+            logger.warning(f"No Ph file for {compound_name}")
+            return
+        self.status_label.setText(f"Creating Abs + Ph overlay for {compound_name}...")
+        self._set_busy_cursor()
+        try:
+            fig = SOLISPlotter().plot_spectra_overlay_mpl(
+                compound_name, abs_file=abs_file, ph_file=ph_file
+            )
+            self._show_plot(f"ph_overlay_{compound_name}", f"Abs + Ph Overlay - {compound_name}", fig)
+            self._restore_cursor()
+            self.status_label.setText(f"Abs + Ph overlay opened: {compound_name}")
+        except Exception as e:
+            self._restore_cursor()
+            logger.error(f"Failed to create Ph overlay for {compound_name}: {e}", exc_info=True)
+            QMessageBox.critical(self, "Plot Error", f"Failed to create Abs + Ph overlay:\n\n{e}")
+            self.status_label.setText("Ph overlay failed")
+
+    def _on_ph_merged_requested(self, compound_names: List[str]):
+        """Plot merged Ph spectra."""
+        from plotting.solis_plotter import SOLISPlotter
+        ph_files = [self._get_spectrum_file(cn, 'phosphorescence') for cn in compound_names]
+        ph_files = [f for f in ph_files if f is not None]
+        if not ph_files:
+            QMessageBox.warning(self, "No Data", "No Ph files found for selected compounds.")
+            return
+        self.status_label.setText(f"Creating merged Ph plot ({len(ph_files)} compounds)...")
+        self._set_busy_cursor()
+        try:
+            fig = SOLISPlotter().plot_merged_ph_spectra_mpl(ph_files)
+            plot_id = "ph_merged_" + "_".join(compound_names) if len(compound_names) <= 3 else f"ph_merged_{len(ph_files)}"
+            title = "Ph Spectra: " + ", ".join(compound_names) if len(compound_names) <= 3 else f"Ph Spectra ({len(ph_files)} compounds)"
+            self._show_plot(plot_id, title, fig)
+            self._restore_cursor()
+            self.status_label.setText(f"Merged Ph plot opened ({len(ph_files)} compounds)")
+        except Exception as e:
+            self._restore_cursor()
+            logger.error(f"Failed to create merged Ph plot: {e}", exc_info=True)
+            QMessageBox.critical(self, "Plot Error", f"Failed to create merged Ph spectra:\n\n{e}")
+            self.status_label.setText("Merged Ph plot failed")
 
     def _show_preview_plot(self, compound_name: str, replicate_num: int, replicate_data: dict):
         """

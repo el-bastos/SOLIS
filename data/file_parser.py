@@ -109,6 +109,8 @@ class FileParser:
         )
 
         self.abs_pattern = r'Abs_(.+?)\.csv'
+        self.fl_pattern = r'FL_(.+?)\.csv'
+        self.ph_pattern = r'Ph_(.+?)\.csv'
 
         # Cache for CSV parsing attempts with size limit (optimized in Session 41)
         # For 8 GB RAM systems, limit to 50 files (~25-50 MB typical)
@@ -184,6 +186,10 @@ class FileParser:
         # Determine file type and parse filename
         if 'decay' in filename.lower():
             parsed_info = self._parse_decay_filename(filename)
+        elif filename.upper().startswith('FL_'):
+            parsed_info = self._parse_fl_filename(filename)
+        elif filename.upper().startswith('PH_'):
+            parsed_info = self._parse_ph_filename(filename)
         elif 'abs' in filename.lower():
             parsed_info = self._parse_abs_filename(filename)
         else:
@@ -252,6 +258,20 @@ class FileParser:
             'file_type': 'decay'
         }
         
+    def _parse_fl_filename(self, filename: str) -> Dict[str, str]:
+        """Parse fluorescence filename: FL_[Compound].csv"""
+        match = re.search(self.fl_pattern, filename, re.IGNORECASE)
+        if not match:
+            raise FileParseError(f"FL filename '{filename}' doesn't match expected format (FL_[Compound].csv)")
+        return {'compound': match.group(1), 'file_type': 'fluorescence'}
+
+    def _parse_ph_filename(self, filename: str) -> Dict[str, str]:
+        """Parse phosphorescence filename: Ph_[Compound].csv"""
+        match = re.search(self.ph_pattern, filename, re.IGNORECASE)
+        if not match:
+            raise FileParseError(f"Ph filename '{filename}' doesn't match expected format (Ph_[Compound].csv)")
+        return {'compound': match.group(1), 'file_type': 'phosphorescence'}
+
     def _parse_abs_filename(self, filename: str) -> Dict[str, str]:
         """Parse absorption filename supporting dots in compound names."""
         match = re.search(self.abs_pattern, filename, re.IGNORECASE)

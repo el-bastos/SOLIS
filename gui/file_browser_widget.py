@@ -77,6 +77,12 @@ class FileBrowserWidget(QWidget):
     folder_loaded = pyqtSignal(dict)  # Emitted when folder loading completes with compounds dict
     absorption_plot_requested = pyqtSignal(str)  # Emitted with compound_name for single absorption plot
     absorption_merged_requested = pyqtSignal(list)  # Emitted with list of compound_names for merged absorption plot
+    fl_plot_requested = pyqtSignal(str)       # compound_name — standalone FL spectrum
+    fl_overlay_requested = pyqtSignal(str)    # compound_name — Abs + FL overlay
+    fl_merged_requested = pyqtSignal(list)    # list of compound_names — merged FL spectra
+    ph_plot_requested = pyqtSignal(str)       # compound_name — standalone Ph spectrum
+    ph_overlay_requested = pyqtSignal(str)    # compound_name — Abs + Ph overlay
+    ph_merged_requested = pyqtSignal(list)    # list of compound_names — merged Ph spectra
     result_item_clicked = pyqtSignal(str)  # result_type (e.g., 'Kinetics', 'Quantum Yield')
     plot_item_clicked = pyqtSignal(str, dict)  # plot_name, plot_data
 
@@ -98,6 +104,8 @@ class FileBrowserWidget(QWidget):
 
         self.icon_decay = QIcon(str(icon_dir / 'decay2.svg'))
         self.icon_abs = QIcon(str(icon_dir / 'ABS2.svg'))
+        self.icon_fl = QIcon(str(icon_dir / 'ABS2.svg'))   # reuse spectrum icon
+        self.icon_ph = QIcon(str(icon_dir / 'ABS2.svg'))   # reuse spectrum icon
         self.icon_result = QIcon(str(icon_dir / 'results2.svg'))
         self.icon_plot = QIcon(str(icon_dir / 'plots2.svg'))
 
@@ -167,6 +175,26 @@ class FileBrowserWidget(QWidget):
         self.abs_section.setForeground(0, QColor(50, 50, 50))
         self.abs_section.setData(0, Qt.ItemDataRole.UserRole, {'section': 'abs_files'})
 
+        # Section 3: FL Spectra
+        self.fl_section = QTreeWidgetItem(tree, ["FL Spectra"])
+        self.fl_section.setExpanded(True)
+        self.fl_section.setFlags(Qt.ItemFlag.ItemIsEnabled)
+        font = self.fl_section.font(0)
+        font.setBold(True)
+        self.fl_section.setFont(0, font)
+        self.fl_section.setForeground(0, QColor(50, 50, 50))
+        self.fl_section.setData(0, Qt.ItemDataRole.UserRole, {'section': 'fl_files'})
+
+        # Section 4: Ph Spectra
+        self.ph_section = QTreeWidgetItem(tree, ["Ph Spectra"])
+        self.ph_section.setExpanded(True)
+        self.ph_section.setFlags(Qt.ItemFlag.ItemIsEnabled)
+        font = self.ph_section.font(0)
+        font.setBold(True)
+        self.ph_section.setFont(0, font)
+        self.ph_section.setForeground(0, QColor(50, 50, 50))
+        self.ph_section.setData(0, Qt.ItemDataRole.UserRole, {'section': 'ph_files'})
+
         # Separator
         spacer1 = QTreeWidgetItem(tree, ["─────────────────────────"])
         spacer1.setFlags(Qt.ItemFlag.NoItemFlags)
@@ -176,7 +204,7 @@ class FileBrowserWidget(QWidget):
         font_spacer.setPointSize(font_spacer.pointSize() - 2)
         spacer1.setFont(0, font_spacer)
 
-        # Section 3: Results
+        # Section 5: Results
         self.results_section = QTreeWidgetItem(tree, ["Results"])
         self.results_section.setExpanded(True)
         self.results_section.setFlags(Qt.ItemFlag.ItemIsEnabled)  # Non-selectable header
@@ -279,7 +307,6 @@ class FileBrowserWidget(QWidget):
             # Check if multiple absorption compounds are selected
             selected_abs_compounds = self._get_selected_absorption_compounds()
             if len(selected_abs_compounds) > 1:
-                # Add "Plot Merged Spectra" action
                 merged_action = QAction(f"Plot Merged Spectra ({len(selected_abs_compounds)} compounds)", self)
                 merged_action.triggered.connect(
                     lambda checked=False, compounds=selected_abs_compounds:
@@ -287,8 +314,80 @@ class FileBrowserWidget(QWidget):
                 )
                 menu.addAction(merged_action)
 
+        elif data.get('type') == 'fl_compound':
+            compound_name = data.get('compound')
+
+            plot_action = QAction("Plot FL Spectrum", self)
+            plot_action.triggered.connect(
+                lambda checked=False, cn=compound_name: self.fl_plot_requested.emit(cn)
+            )
+            menu.addAction(plot_action)
+
+            # Offer Abs+FL overlay if abs file exists
+            if compound_name in self.compounds:
+                has_abs = any(f.file_type == 'absorption' for f in self.compounds[compound_name])
+                if has_abs:
+                    overlay_action = QAction("Plot Abs + FL Overlay", self)
+                    overlay_action.triggered.connect(
+                        lambda checked=False, cn=compound_name: self.fl_overlay_requested.emit(cn)
+                    )
+                    menu.addAction(overlay_action)
+
+            selected_fl = self._get_selected_fl_compounds()
+            if len(selected_fl) > 1:
+                merged_action = QAction(f"Plot Merged FL Spectra ({len(selected_fl)} compounds)", self)
+                merged_action.triggered.connect(
+                    lambda checked=False, compounds=selected_fl: self.fl_merged_requested.emit(compounds)
+                )
+                menu.addAction(merged_action)
+
+        elif data.get('type') == 'ph_compound':
+            compound_name = data.get('compound')
+
+            plot_action = QAction("Plot Ph Spectrum", self)
+            plot_action.triggered.connect(
+                lambda checked=False, cn=compound_name: self.ph_plot_requested.emit(cn)
+            )
+            menu.addAction(plot_action)
+
+            # Offer Abs+Ph overlay if abs file exists
+            if compound_name in self.compounds:
+                has_abs = any(f.file_type == 'absorption' for f in self.compounds[compound_name])
+                if has_abs:
+                    overlay_action = QAction("Plot Abs + Ph Overlay", self)
+                    overlay_action.triggered.connect(
+                        lambda checked=False, cn=compound_name: self.ph_overlay_requested.emit(cn)
+                    )
+                    menu.addAction(overlay_action)
+
+            selected_ph = self._get_selected_ph_compounds()
+            if len(selected_ph) > 1:
+                merged_action = QAction(f"Plot Merged Ph Spectra ({len(selected_ph)} compounds)", self)
+                merged_action.triggered.connect(
+                    lambda checked=False, compounds=selected_ph: self.ph_merged_requested.emit(compounds)
+                )
+                menu.addAction(merged_action)
+
         if menu.actions():
             menu.exec(self.tree.viewport().mapToGlobal(position))
+
+    def _get_selected_fl_compounds(self) -> List[str]:
+        """Get list of selected FL compound names."""
+        return [
+            item.data(0, Qt.ItemDataRole.UserRole).get('compound')
+            for item in self.tree.selectedItems()
+            if item.data(0, Qt.ItemDataRole.UserRole) and
+            item.data(0, Qt.ItemDataRole.UserRole).get('type') == 'fl_compound'
+        ]
+
+    def _get_selected_ph_compounds(self) -> List[str]:
+        """Get list of selected Ph compound names."""
+        return [
+            item.data(0, Qt.ItemDataRole.UserRole).get('compound')
+            for item in self.tree.selectedItems()
+            if item.data(0, Qt.ItemDataRole.UserRole) and
+            item.data(0, Qt.ItemDataRole.UserRole).get('type') == 'ph_compound'
+        ]
 
     def _get_selected_absorption_compounds(self) -> List[str]:
         """Get list of selected (highlighted) absorption compound names."""
@@ -350,6 +449,8 @@ class FileBrowserWidget(QWidget):
             # Populate browser
             self._populate_decay_section()
             self._populate_abs_section()
+            self._populate_fl_section()
+            self._populate_ph_section()
 
             # Update status
             n_compounds = len(self.compounds)
@@ -493,6 +594,44 @@ class FileBrowserWidget(QWidget):
         finally:
             self.tree.setUpdatesEnabled(True)
 
+    def _populate_fl_section(self):
+        """Populate fluorescence spectra section."""
+        self.tree.setUpdatesEnabled(False)
+        try:
+            self.fl_section.takeChildren()
+            fl_compounds = sorted(
+                compound for compound, files in self.compounds.items()
+                if any(f.file_type == 'fluorescence' for f in files)
+            )
+            for compound_name in fl_compounds:
+                item = QTreeWidgetItem(self.fl_section, [compound_name])
+                item.setIcon(0, self.icon_fl)
+                item.setData(0, Qt.ItemDataRole.UserRole, {
+                    'type': 'fl_compound',
+                    'compound': compound_name
+                })
+        finally:
+            self.tree.setUpdatesEnabled(True)
+
+    def _populate_ph_section(self):
+        """Populate phosphorescence spectra section."""
+        self.tree.setUpdatesEnabled(False)
+        try:
+            self.ph_section.takeChildren()
+            ph_compounds = sorted(
+                compound for compound, files in self.compounds.items()
+                if any(f.file_type == 'phosphorescence' for f in files)
+            )
+            for compound_name in ph_compounds:
+                item = QTreeWidgetItem(self.ph_section, [compound_name])
+                item.setIcon(0, self.icon_ph)
+                item.setData(0, Qt.ItemDataRole.UserRole, {
+                    'type': 'ph_compound',
+                    'compound': compound_name
+                })
+        finally:
+            self.tree.setUpdatesEnabled(True)
+
     # ==================== RESULTS/PLOTS POPULATION ====================
 
     def add_result_item(self, result_type: str):
@@ -583,6 +722,8 @@ class FileBrowserWidget(QWidget):
         """Clear decay and abs files."""
         self.decay_section.takeChildren()
         self.abs_section.takeChildren()
+        self.fl_section.takeChildren()
+        self.ph_section.takeChildren()
         self.compounds = {}
 
     def clear_data(self):
@@ -606,6 +747,8 @@ class FileBrowserWidget(QWidget):
 
             self._populate_decay_section()
             self._populate_abs_section()
+            self._populate_fl_section()
+            self._populate_ph_section()
 
             n_compounds = len(self.compounds)
             total_replicates = sum(len([f for f in files if f.file_type == 'decay'])

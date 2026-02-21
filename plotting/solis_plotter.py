@@ -1568,6 +1568,200 @@ class SOLISPlotter:
         logger.info("Merged absorption spectra plot created successfully")
         return fig
 
+    def plot_fl_spectrum_mpl(self, parsed_file, title: Optional[str] = None) -> Figure:
+        """Plot a single fluorescence emission spectrum."""
+        logger.info(f"Creating FL spectrum plot for {parsed_file.compound}")
+
+        df = parsed_file.data
+        wavelength = df.iloc[:, 0].values
+        intensity_cols = df.iloc[:, 1:].values
+        intensity = np.mean(intensity_cols, axis=1) if intensity_cols.shape[1] > 1 else intensity_cols[:, 0]
+
+        fig = Figure(figsize=(8, 5), constrained_layout=True)
+        ax = fig.add_subplot(111)
+        ax.plot(wavelength, intensity, color='#27ae60', linewidth=2, label=parsed_file.compound)
+        ax.set_xlabel('Wavelength (nm)', fontsize=12)
+        ax.set_ylabel('Emission Intensity (a.u.)', fontsize=12)
+        ax.tick_params(axis='both', labelsize=10)
+        ax.grid(True, alpha=0.3, linestyle='--')
+        ax.legend(loc='best', fontsize=10)
+
+        if title is None:
+            title = f'Fluorescence Spectrum: {parsed_file.compound}'
+        fig.suptitle(title, fontsize=14, fontweight='bold')
+
+        fig.solis_export_data = {
+            'Wavelength_nm': wavelength,
+            'FL_Intensity': intensity,
+            'Compound': parsed_file.compound
+        }
+        logger.info("FL spectrum plot created successfully")
+        return fig
+
+    def plot_ph_spectrum_mpl(self, parsed_file, title: Optional[str] = None) -> Figure:
+        """Plot a single phosphorescence emission spectrum."""
+        logger.info(f"Creating Ph spectrum plot for {parsed_file.compound}")
+
+        df = parsed_file.data
+        wavelength = df.iloc[:, 0].values
+        intensity_cols = df.iloc[:, 1:].values
+        intensity = np.mean(intensity_cols, axis=1) if intensity_cols.shape[1] > 1 else intensity_cols[:, 0]
+
+        fig = Figure(figsize=(8, 5), constrained_layout=True)
+        ax = fig.add_subplot(111)
+        ax.plot(wavelength, intensity, color='#8e44ad', linewidth=2, label=parsed_file.compound)
+        ax.set_xlabel('Wavelength (nm)', fontsize=12)
+        ax.set_ylabel('Emission Intensity (a.u.)', fontsize=12)
+        ax.tick_params(axis='both', labelsize=10)
+        ax.grid(True, alpha=0.3, linestyle='--')
+        ax.legend(loc='best', fontsize=10)
+
+        if title is None:
+            title = f'Phosphorescence Spectrum: {parsed_file.compound}'
+        fig.suptitle(title, fontsize=14, fontweight='bold')
+
+        fig.solis_export_data = {
+            'Wavelength_nm': wavelength,
+            'Ph_Intensity': intensity,
+            'Compound': parsed_file.compound
+        }
+        logger.info("Ph spectrum plot created successfully")
+        return fig
+
+    def plot_merged_fl_spectra_mpl(self, parsed_files: List, title: Optional[str] = None) -> Figure:
+        """Plot multiple fluorescence spectra overlaid."""
+        logger.info(f"Creating merged FL spectra plot with {len(parsed_files)} spectra")
+
+        fig = Figure(figsize=(10, 6), constrained_layout=True)
+        ax = fig.add_subplot(111)
+        export_data = {}
+
+        for idx, parsed_file in enumerate(parsed_files):
+            df = parsed_file.data
+            wavelength = df.iloc[:, 0].values
+            intensity_cols = df.iloc[:, 1:].values
+            intensity = np.mean(intensity_cols, axis=1) if intensity_cols.shape[1] > 1 else intensity_cols[:, 0]
+            color = MERGED_COLORS[idx % len(MERGED_COLORS)]
+            ax.plot(wavelength, intensity, color=color, linewidth=2, label=parsed_file.compound)
+            export_data[f'Wavelength_nm_{parsed_file.compound}'] = wavelength
+            export_data[f'FL_Intensity_{parsed_file.compound}'] = intensity
+
+        ax.set_xlabel('Wavelength (nm)', fontsize=12)
+        ax.set_ylabel('Emission Intensity (a.u.)', fontsize=12)
+        ax.tick_params(axis='both', labelsize=10)
+        ax.grid(True, alpha=0.3, linestyle='--')
+        ax.legend(loc='best', fontsize=10)
+
+        if title is None:
+            title = f'Fluorescence Spectra ({len(parsed_files)} compounds)'
+        fig.suptitle(title, fontsize=14, fontweight='bold')
+        fig.solis_export_data = export_data
+        logger.info("Merged FL spectra plot created successfully")
+        return fig
+
+    def plot_merged_ph_spectra_mpl(self, parsed_files: List, title: Optional[str] = None) -> Figure:
+        """Plot multiple phosphorescence spectra overlaid."""
+        logger.info(f"Creating merged Ph spectra plot with {len(parsed_files)} spectra")
+
+        fig = Figure(figsize=(10, 6), constrained_layout=True)
+        ax = fig.add_subplot(111)
+        export_data = {}
+
+        for idx, parsed_file in enumerate(parsed_files):
+            df = parsed_file.data
+            wavelength = df.iloc[:, 0].values
+            intensity_cols = df.iloc[:, 1:].values
+            intensity = np.mean(intensity_cols, axis=1) if intensity_cols.shape[1] > 1 else intensity_cols[:, 0]
+            color = MERGED_COLORS[idx % len(MERGED_COLORS)]
+            ax.plot(wavelength, intensity, color=color, linewidth=2, label=parsed_file.compound)
+            export_data[f'Wavelength_nm_{parsed_file.compound}'] = wavelength
+            export_data[f'Ph_Intensity_{parsed_file.compound}'] = intensity
+
+        ax.set_xlabel('Wavelength (nm)', fontsize=12)
+        ax.set_ylabel('Emission Intensity (a.u.)', fontsize=12)
+        ax.tick_params(axis='both', labelsize=10)
+        ax.grid(True, alpha=0.3, linestyle='--')
+        ax.legend(loc='best', fontsize=10)
+
+        if title is None:
+            title = f'Phosphorescence Spectra ({len(parsed_files)} compounds)'
+        fig.suptitle(title, fontsize=14, fontweight='bold')
+        fig.solis_export_data = export_data
+        logger.info("Merged Ph spectra plot created successfully")
+        return fig
+
+    def plot_spectra_overlay_mpl(
+        self,
+        compound_name: str,
+        abs_file=None,
+        fl_file=None,
+        ph_file=None,
+        title: Optional[str] = None
+    ) -> Figure:
+        """
+        Plot normalized spectral overlay (any combination of Abs, FL, Ph).
+
+        All spectra are normalized to 0–1 so they can be compared on the same axis.
+        At least one file must be provided.
+        """
+        if abs_file is None and fl_file is None and ph_file is None:
+            raise ValueError("At least one spectrum file must be provided")
+
+        logger.info(f"Creating spectral overlay for {compound_name}")
+
+        fig = Figure(figsize=(9, 5), constrained_layout=True)
+        ax = fig.add_subplot(111)
+        export_data = {}
+
+        def _extract_and_normalize(parsed_file):
+            df = parsed_file.data
+            x = df.iloc[:, 0].values
+            y_cols = df.iloc[:, 1:].values
+            y = np.mean(y_cols, axis=1) if y_cols.shape[1] > 1 else y_cols[:, 0]
+            y_range = y.max() - y.min()
+            y_norm = (y - y.min()) / y_range if y_range > 0 else y
+            return x, y_norm
+
+        if abs_file is not None:
+            x, y = _extract_and_normalize(abs_file)
+            ax.plot(x, y, 'k-', linewidth=2, label='Absorbance')
+            export_data['Wavelength_nm_Abs'] = x
+            export_data['Absorbance_norm'] = y
+
+        if fl_file is not None:
+            x, y = _extract_and_normalize(fl_file)
+            ax.plot(x, y, color='#27ae60', linewidth=2, linestyle='-', label='FL Emission')
+            export_data['Wavelength_nm_FL'] = x
+            export_data['FL_norm'] = y
+
+        if ph_file is not None:
+            x, y = _extract_and_normalize(ph_file)
+            ax.plot(x, y, color='#8e44ad', linewidth=2, linestyle='--', label='Ph Emission')
+            export_data['Wavelength_nm_Ph'] = x
+            export_data['Ph_norm'] = y
+
+        ax.set_xlabel('Wavelength (nm)', fontsize=12)
+        ax.set_ylabel('Normalized Intensity', fontsize=12)
+        ax.set_ylim(-0.05, 1.1)
+        ax.tick_params(axis='both', labelsize=10)
+        ax.grid(True, alpha=0.3, linestyle='--')
+        ax.legend(loc='best', fontsize=10)
+
+        if title is None:
+            parts = []
+            if abs_file is not None:
+                parts.append('Abs')
+            if fl_file is not None:
+                parts.append('FL')
+            if ph_file is not None:
+                parts.append('Ph')
+            title = f'{" + ".join(parts)} Overlay: {compound_name}'
+        fig.suptitle(title, fontsize=14, fontweight='bold')
+
+        fig.solis_export_data = export_data
+        logger.info("Spectral overlay plot created successfully")
+        return fig
+
 
 def wavelength_to_color(wavelength: float) -> str:
     """
