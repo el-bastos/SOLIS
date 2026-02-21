@@ -12,7 +12,7 @@ Date: 2025-10-25, Updated: 2025-10-29
 """
 
 import numpy as np
-from typing import List, Optional, Dict, Any, Union
+from typing import List, Optional, Dict, Any, Tuple, Union
 from pathlib import Path
 import logging
 
@@ -590,6 +590,21 @@ class SOLISPlotter:
 
         logger.info(f"Matplotlib batch summary plot created: {n_reps} replicates")
         return fig
+
+    def _calculate_mean_curve(
+        self, results: List[KineticsResult]
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """Compute mean and std of main_curve across replicates.
+
+        Truncates to the shortest curve length so all arrays align.
+
+        Returns:
+            (mean_curve, std_curve) arrays of equal length.
+        """
+        curves = [r.main_curve for r in results]
+        min_len = min(len(c) for c in curves)
+        stacked = np.column_stack([c[:min_len] for c in curves])
+        return stacked.mean(axis=1), stacked.std(axis=1)
 
     def _add_batch_statistics_mpl(
         self,
