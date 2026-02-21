@@ -24,6 +24,7 @@ from gui.analysis_worker import AnalysisWorker
 from gui.plot_viewer_widget import PlotViewerWidget
 from gui.variable_study_widget import VariableStudyWidget
 from gui.stylesheets import MENU_STYLE, PROGRESS_BAR_STYLE, get_global_flat_style
+from plotting.plot_style import PlotStyle
 from utils.logger_config import get_logger
 from utils.session_manager import SessionManager, save_session_dialog, load_session_dialog
 
@@ -63,12 +64,16 @@ class SOLISMainWindow(QMainWindow):
             },
             'surplus': {
                 'mask_time_us': 6.0
-            }
+            },
+            'plot_style': {}
             # Heterogeneous analysis parameters now in HeterogeneousDialog (not preferences)
         }
 
         # Backward compatibility
         self.snr_thresholds = self.preferences['snr_thresholds']
+
+        # Plot style (lazily created from preferences dict)
+        self._plot_style = None
 
         # Store loaded compounds for analysis
         self.loaded_compounds = None
@@ -203,9 +208,9 @@ class SOLISMainWindow(QMainWindow):
         # === Preferences Menu ===
         preferences_menu = menubar.addMenu("&Preferences")
 
-        # SNR Thresholds
-        snr_thresholds_action = QAction("&SNR Thresholds...", self)
-        snr_thresholds_action.setStatusTip("Configure SNR thresholds for analysis modes")
+        # Preferences
+        snr_thresholds_action = QAction("&Preferences...", self)
+        snr_thresholds_action.setStatusTip("Configure SNR thresholds and analysis parameters")
         snr_thresholds_action.triggered.connect(self._show_preferences)
         preferences_menu.addAction(snr_thresholds_action)
 
@@ -482,6 +487,15 @@ class SOLISMainWindow(QMainWindow):
         """Update status bar with message from widgets."""
         self.status_label.setText(message)
 
+    @property
+    def plot_style(self) -> PlotStyle:
+        """Current PlotStyle from preferences (cached, invalidated on update)."""
+        if self._plot_style is None:
+            self._plot_style = PlotStyle.from_dict(
+                self.preferences.get('plot_style', {})
+            )
+        return self._plot_style
+
     def _show_preferences(self):
         """Show preferences dialog."""
         dialog = PreferencesDialog(self, self.preferences)
@@ -489,9 +503,10 @@ class SOLISMainWindow(QMainWindow):
             # User clicked OK - save new settings
             self.preferences = dialog.get_settings()
             self.snr_thresholds = self.preferences['snr_thresholds']  # Backward compatibility
+            self._plot_style = None  # Invalidate cache so next access rebuilds from new prefs
             logger.info(f"Preferences updated: {self.preferences}")
             self.status_label.setText(
-                f"Preferences updated: SNR thresholds and surplus mask time saved"
+                f"Preferences updated"
             )
 
     def _show_help(self):
@@ -752,6 +767,7 @@ class SOLISMainWindow(QMainWindow):
             if 'preferences' in session_data:
                 self.preferences.update(session_data['preferences'])
                 self.snr_thresholds = self.preferences['snr_thresholds']
+                self._plot_style = None  # Invalidate cache
                 logger.info("Preferences restored from session")
 
             # Restore UI state
@@ -1059,11 +1075,14 @@ class SOLISMainWindow(QMainWindow):
 
         # Create plot using existing plotter
         from plotting.solis_plotter import SOLISPlotter
-        plotter = SOLISPlotter()
+        plotter = SOLISPlotter(style=self.plot_style)
         fig = plotter.plot_single_decay_mpl(
             result,
             log_x=False,
             title=f"{compound} - Rep {replicate_num}"
+        )
+        fig.solis_replot = lambda r=result, c=compound, rn=replicate_num: (
+            SOLISPlotter(style=self.plot_style).plot_single_decay_mpl(r, log_x=False, title=f"{c} - Rep {rn}")
         )
 
         # Display (don't re-log this operation!)
@@ -1090,12 +1109,15 @@ class SOLISMainWindow(QMainWindow):
 
         # Create plot using existing plotter
         from plotting.solis_plotter import SOLISPlotter
-        plotter = SOLISPlotter()
+        plotter = SOLISPlotter(style=self.plot_style)
         fig = plotter.plot_mean_decay_mpl(
             mean_arrays,
             sd_arrays,
             log_x=False,
             title=f"{compound} - Mean ± SD"
+        )
+        fig.solis_replot = lambda ma=mean_arrays, sa=sd_arrays, c=compound: (
+            SOLISPlotter(style=self.plot_style).plot_mean_decay_mpl(ma, sa, log_x=False, title=f"{c} - Mean ± SD")
         )
 
         # Display
@@ -1161,11 +1183,14 @@ class SOLISMainWindow(QMainWindow):
 
         # Create merged plot
         from plotting.solis_plotter import SOLISPlotter
-        plotter = SOLISPlotter()
+        plotter = SOLISPlotter(style=self.plot_style)
         fig = plotter.plot_merged_decay_mpl(
             selected_items,
             log_x=True,
             title="Merged Decay Curves"
+        )
+        fig.solis_replot = lambda si=selected_items: (
+            SOLISPlotter(style=self.plot_style).plot_merged_decay_mpl(si, log_x=True, title="Merged Decay Curves")
         )
 
         # Generate plot_id
@@ -1193,8 +1218,11 @@ class SOLISMainWindow(QMainWindow):
 
         # Create plot
         from plotting.solis_plotter import SOLISPlotter
-        plotter = SOLISPlotter()
+        plotter = SOLISPlotter(style=self.plot_style)
         fig = plotter.plot_surplus_analysis_mpl(result, log_x=True)
+        fig.solis_replot = lambda r=result: (
+            SOLISPlotter(style=self.plot_style).plot_surplus_analysis_mpl(r, log_x=True)
+        )
 
         # Show plot
         plot_id = f"surplus_{compound}"
@@ -1215,8 +1243,11 @@ class SOLISMainWindow(QMainWindow):
 
         # Create plotter and generate fit plot
         from heterogeneous.heterogeneous_plotter_new import HeterogeneousPlotter
-        plotter = HeterogeneousPlotter(result)
+        plotter = HeterogeneousPlotter(result, style=self.plot_style)
         fig = plotter.plot_fit_curves(show_components=True)
+        fig.solis_replot = lambda r=result: (
+            HeterogeneousPlotter(r, style=self.plot_style).plot_fit_curves(show_components=True)
+        )
 
         # Show plot
         plot_id = f"hetero_fit_{key}"
@@ -1237,10 +1268,13 @@ class SOLISMainWindow(QMainWindow):
 
         # Create plotter and generate landscape plot
         from heterogeneous.heterogeneous_plotter_new import HeterogeneousPlotter
-        plotter = HeterogeneousPlotter(result)
+        plotter = HeterogeneousPlotter(result, style=self.plot_style)
 
         try:
             fig = plotter.plot_figure_4()
+            fig.solis_replot = lambda r=result: (
+                HeterogeneousPlotter(r, style=self.plot_style).plot_figure_4()
+            )
             plot_id = f"hetero_grid_{key}"
             title = f"Chi-square Landscape - {key}"
             self._show_plot(plot_id, title, fig, skip_logging=True)
@@ -1314,11 +1348,17 @@ class SOLISMainWindow(QMainWindow):
         # Create appropriate plot
         try:
             if check_type == 'beer_lambert':
-                fig, _ = plot_alpha_vs_absorption_mpl(selected_items, ei_unit or "")
+                fig, _ = plot_alpha_vs_absorption_mpl(selected_items, ei_unit or "", style=self.plot_style)
+                fig.solis_replot = lambda si=selected_items, eu=ei_unit: (
+                    plot_alpha_vs_absorption_mpl(si, eu or "", style=self.plot_style)[0]
+                )
                 plot_id = "Alpha_vs_Absorption"
                 title = "α vs (1 - 10^(-A(λ)))"
             elif check_type == 'excitation_intensity':
-                fig, _ = plot_alpha_vs_intensity_mpl(selected_items, ei_unit or "")
+                fig, _ = plot_alpha_vs_intensity_mpl(selected_items, ei_unit or "", style=self.plot_style)
+                fig.solis_replot = lambda si=selected_items, eu=ei_unit: (
+                    plot_alpha_vs_intensity_mpl(si, eu or "", style=self.plot_style)[0]
+                )
                 plot_id = "Alpha_vs_Intensity"
                 title = "α vs Excitation Intensity"
             else:
@@ -1349,12 +1389,15 @@ class SOLISMainWindow(QMainWindow):
 
         # Create plot
         from plotting.solis_plotter import SOLISPlotter
-        plotter = SOLISPlotter()
+        plotter = SOLISPlotter(style=self.plot_style)
 
         try:
             fig = plotter.plot_absorption_spectrum_mpl(
                 abs_file,
                 excitation_wavelengths=excitation_wavelengths
+            )
+            fig.solis_replot = lambda af=abs_file, ew=excitation_wavelengths: (
+                SOLISPlotter(style=self.plot_style).plot_absorption_spectrum_mpl(af, excitation_wavelengths=ew)
             )
 
             plot_id = f"abs_{compound}"
@@ -1388,12 +1431,15 @@ class SOLISMainWindow(QMainWindow):
 
         # Create plot
         from plotting.solis_plotter import SOLISPlotter
-        plotter = SOLISPlotter()
+        plotter = SOLISPlotter(style=self.plot_style)
 
         try:
             fig = plotter.plot_merged_absorption_spectra_mpl(
                 parsed_files,
                 excitation_wavelengths=excitation_wavelengths
+            )
+            fig.solis_replot = lambda pf=parsed_files, ew=excitation_wavelengths: (
+                SOLISPlotter(style=self.plot_style).plot_merged_absorption_spectra_mpl(pf, excitation_wavelengths=ew)
             )
 
             plot_id = "abs_merged"
@@ -1649,7 +1695,7 @@ class SOLISMainWindow(QMainWindow):
         self._set_busy_cursor()
         QApplication.processEvents()  # Update UI immediately
 
-        plotter = SOLISPlotter()
+        plotter = SOLISPlotter(style=self.plot_style)
 
         # For now: simple implementation - one plot per selection type
         # TODO: Support multiple curves in one plot
@@ -1672,6 +1718,9 @@ class SOLISMainWindow(QMainWindow):
                     log_x=False,
                     title=f"{item['compound']} - Mean ± SD"
                 )
+                fig.solis_replot = lambda ma=item['mean_arrays'], sa=item['sd_arrays'], c=item['compound']: (
+                    SOLISPlotter(style=self.plot_style).plot_mean_decay_mpl(ma, sa, log_x=False, title=f"{c} - Mean ± SD")
+                )
                 self._show_plot(f"{item['compound']}_Mean", f"Mean: {item['compound']}", fig)
 
             elif item['type'] == 'replicate':
@@ -1690,6 +1739,9 @@ class SOLISMainWindow(QMainWindow):
                     item['result'],
                     log_x=False,
                     title=f"{item['compound']} - Rep {item['replicate_num']}"
+                )
+                fig.solis_replot = lambda r=item['result'], c=item['compound'], rn=item['replicate_num']: (
+                    SOLISPlotter(style=self.plot_style).plot_single_decay_mpl(r, log_x=False, title=f"{c} - Rep {rn}")
                 )
                 self._show_plot(
                     f"{item['compound']}_Rep{item['replicate_num']}",
@@ -1717,7 +1769,7 @@ class SOLISMainWindow(QMainWindow):
         self._set_busy_cursor()
         QApplication.processEvents()  # Update UI immediately
 
-        plotter = SOLISPlotter()
+        plotter = SOLISPlotter(style=self.plot_style)
 
         # Create merged plot with all selected items
         try:
@@ -1740,6 +1792,9 @@ class SOLISMainWindow(QMainWindow):
                 selected_items,
                 log_x=True,
                 title="Merged Decay Curves"
+            )
+            fig.solis_replot = lambda si=selected_items: (
+                SOLISPlotter(style=self.plot_style).plot_merged_decay_mpl(si, log_x=True, title="Merged Decay Curves")
             )
 
             # Generate plot_id from all compounds
@@ -1865,7 +1920,7 @@ class SOLISMainWindow(QMainWindow):
             viewer = self.plot_viewers[plot_id]
 
             # Create batch plot with mean and SD using matplotlib (Session 15)
-            plotter = SOLISPlotter()
+            plotter = SOLISPlotter(style=self.plot_style)
             logger.info(f"Creating batch plot for {compound_name} with {len(replicate_results)} replicates")
             fig = plotter.plot_batch_summary_mpl(
                 replicate_results,
@@ -1873,6 +1928,12 @@ class SOLISMainWindow(QMainWindow):
                 title=f'{compound_name} - Mean ± SD (n={len(replicate_results)})',
                 show_mean=True,
                 show_statistics=True
+            )
+            fig.solis_replot = lambda rr=replicate_results, cn=compound_name: (
+                SOLISPlotter(style=self.plot_style).plot_batch_summary_mpl(
+                    rr, log_x=False, title=f'{cn} - Mean ± SD (n={len(rr)})',
+                    show_mean=True, show_statistics=True
+                )
             )
 
             logger.info(f"Batch plot created successfully, figure type: {type(fig)}")
@@ -2115,7 +2176,10 @@ class SOLISMainWindow(QMainWindow):
                 }
                 self.plot_operations.append(operation)
 
-                fig, regression_stats = plot_alpha_vs_absorption_mpl(selected_items, ei_unit or "")
+                fig, regression_stats = plot_alpha_vs_absorption_mpl(selected_items, ei_unit or "", style=self.plot_style)
+                fig.solis_replot = lambda si=selected_items, eu=ei_unit: (
+                    plot_alpha_vs_absorption_mpl(si, eu or "", style=self.plot_style)[0]
+                )
                 plot_id = "Alpha_vs_Absorption"
                 title = "α vs (1 - 10^(-A(λ)))"
                 self._show_plot(plot_id, title, fig)
@@ -2140,7 +2204,10 @@ class SOLISMainWindow(QMainWindow):
                 }
                 self.plot_operations.append(operation)
 
-                fig, regression_stats = plot_alpha_vs_intensity_mpl(selected_items, ei_unit or "")
+                fig, regression_stats = plot_alpha_vs_intensity_mpl(selected_items, ei_unit or "", style=self.plot_style)
+                fig.solis_replot = lambda si=selected_items, eu=ei_unit: (
+                    plot_alpha_vs_intensity_mpl(si, eu or "", style=self.plot_style)[0]
+                )
                 plot_id = "Alpha_vs_Intensity"
                 title = "α vs Excitation Intensity"
                 self._show_plot(plot_id, title, fig)
@@ -2401,8 +2468,11 @@ class SOLISMainWindow(QMainWindow):
             self.plot_operations.append(operation)
 
             # Create plot
-            plotter = SOLISPlotter()
+            plotter = SOLISPlotter(style=self.plot_style)
             fig = plotter.plot_surplus_analysis_mpl(result, log_x=True)
+            fig.solis_replot = lambda r=result: (
+                SOLISPlotter(style=self.plot_style).plot_surplus_analysis_mpl(r, log_x=True)
+            )
 
             # Show plot
             plot_id = f"surplus_{compound_name}"
@@ -2621,10 +2691,13 @@ class SOLISMainWindow(QMainWindow):
         self.results_viewer.populate_heterogeneous_results(self.results_viewer.heterogeneous_results)
 
         # Create plots using new plotter
-        plotter = HeterogeneousPlotter(result)
+        plotter = HeterogeneousPlotter(result, style=self.plot_style)
 
         # Plot 1: Fit curves with components
         fig_fit = plotter.plot_fit_curves(show_components=True)
+        fig_fit.solis_replot = lambda r=result: (
+            HeterogeneousPlotter(r, style=self.plot_style).plot_fit_curves(show_components=True)
+        )
         plot_id_fit = f"hetero_fit_{compound_name}_Rep{replicate_num}"
         title_fit = f"Heterogeneous Fit - {compound_name} Rep{replicate_num}"
         self._show_plot(plot_id_fit, title_fit, fig_fit)
@@ -2632,6 +2705,9 @@ class SOLISMainWindow(QMainWindow):
         # Plot 2: Chi-square landscape (Figure 4)
         try:
             fig_grid = plotter.plot_figure_4()
+            fig_grid.solis_replot = lambda r=result: (
+                HeterogeneousPlotter(r, style=self.plot_style).plot_figure_4()
+            )
             plot_id_grid = f"hetero_grid_{compound_name}_Rep{replicate_num}"
             title_grid = f"Chi-square Landscape - {compound_name} Rep{replicate_num}"
             self._show_plot(plot_id_grid, title_grid, fig_grid)
@@ -2681,7 +2757,7 @@ class SOLISMainWindow(QMainWindow):
 
         try:
             # Create plotter with result
-            plotter = HeterogeneousPlotter(result)
+            plotter = HeterogeneousPlotter(result, style=self.plot_style)
 
             # Plot 1: Fit curves with components
             # Log operation for replay
@@ -2692,6 +2768,9 @@ class SOLISMainWindow(QMainWindow):
             self.plot_operations.append(operation_fit)
 
             fig_fit = plotter.plot_fit_curves(show_components=True)
+            fig_fit.solis_replot = lambda r=result: (
+                HeterogeneousPlotter(r, style=self.plot_style).plot_fit_curves(show_components=True)
+            )
             plot_id_fit = f"hetero_fit_{key}"
             title_fit = f"Heterogeneous Fit - {key}"
             self._show_plot(plot_id_fit, title_fit, fig_fit)
@@ -2706,6 +2785,9 @@ class SOLISMainWindow(QMainWindow):
                 self.plot_operations.append(operation_landscape)
 
                 fig_grid = plotter.plot_figure_4()
+                fig_grid.solis_replot = lambda r=result: (
+                    HeterogeneousPlotter(r, style=self.plot_style).plot_figure_4()
+                )
                 plot_id_grid = f"hetero_grid_{key}"
                 title_grid = f"Chi-square Landscape - {key}"
                 self._show_plot(plot_id_grid, title_grid, fig_grid)
@@ -2765,10 +2847,13 @@ class SOLISMainWindow(QMainWindow):
             self.plot_operations.append(operation)
 
             # Create plot
-            plotter = SOLISPlotter()
+            plotter = SOLISPlotter(style=self.plot_style)
             fig = plotter.plot_absorption_spectrum_mpl(
                 abs_file,
                 excitation_wavelengths=excitation_wavelengths if excitation_wavelengths else None
+            )
+            fig.solis_replot = lambda af=abs_file, ew=(excitation_wavelengths if excitation_wavelengths else None): (
+                SOLISPlotter(style=self.plot_style).plot_absorption_spectrum_mpl(af, excitation_wavelengths=ew)
             )
 
             # Show plot
@@ -2843,10 +2928,13 @@ class SOLISMainWindow(QMainWindow):
             self.plot_operations.append(operation)
 
             # Create plot
-            plotter = SOLISPlotter()
+            plotter = SOLISPlotter(style=self.plot_style)
             fig = plotter.plot_merged_absorption_spectra_mpl(
                 parsed_files,
                 excitation_wavelengths=excitation_wavelengths if excitation_wavelengths else None
+            )
+            fig.solis_replot = lambda pf=parsed_files, ew=(excitation_wavelengths if excitation_wavelengths else None): (
+                SOLISPlotter(style=self.plot_style).plot_merged_absorption_spectra_mpl(pf, excitation_wavelengths=ew)
             )
 
             # Show plot
@@ -2893,7 +2981,8 @@ class SOLISMainWindow(QMainWindow):
         self.status_label.setText(f"Creating FL spectrum for {compound_name}...")
         self._set_busy_cursor()
         try:
-            fig = SOLISPlotter().plot_fl_spectrum_mpl(fl_file)
+            fig = SOLISPlotter(style=self.plot_style).plot_fl_spectrum_mpl(fl_file)
+            fig.solis_replot = lambda f=fl_file: SOLISPlotter(style=self.plot_style).plot_fl_spectrum_mpl(f)
             self._show_plot(f"fl_{compound_name}", f"FL Spectrum - {compound_name}", fig)
             self._restore_cursor()
             self.status_label.setText(f"FL spectrum opened: {compound_name}")
@@ -2914,8 +3003,11 @@ class SOLISMainWindow(QMainWindow):
         self.status_label.setText(f"Creating Abs + FL overlay for {compound_name}...")
         self._set_busy_cursor()
         try:
-            fig = SOLISPlotter().plot_spectra_overlay_mpl(
+            fig = SOLISPlotter(style=self.plot_style).plot_spectra_overlay_mpl(
                 compound_name, abs_file=abs_file, fl_file=fl_file
+            )
+            fig.solis_replot = lambda cn=compound_name, af=abs_file, ff=fl_file: (
+                SOLISPlotter(style=self.plot_style).plot_spectra_overlay_mpl(cn, abs_file=af, fl_file=ff)
             )
             self._show_plot(f"fl_overlay_{compound_name}", f"Abs + FL Overlay - {compound_name}", fig)
             self._restore_cursor()
@@ -2937,7 +3029,8 @@ class SOLISMainWindow(QMainWindow):
         self.status_label.setText(f"Creating merged FL plot ({len(fl_files)} compounds)...")
         self._set_busy_cursor()
         try:
-            fig = SOLISPlotter().plot_merged_fl_spectra_mpl(fl_files)
+            fig = SOLISPlotter(style=self.plot_style).plot_merged_fl_spectra_mpl(fl_files)
+            fig.solis_replot = lambda ff=fl_files: SOLISPlotter(style=self.plot_style).plot_merged_fl_spectra_mpl(ff)
             plot_id = "fl_merged_" + "_".join(compound_names) if len(compound_names) <= 3 else f"fl_merged_{len(fl_files)}"
             title = "FL Spectra: " + ", ".join(compound_names) if len(compound_names) <= 3 else f"FL Spectra ({len(fl_files)} compounds)"
             self._show_plot(plot_id, title, fig)
@@ -2959,7 +3052,8 @@ class SOLISMainWindow(QMainWindow):
         self.status_label.setText(f"Creating Ph spectrum for {compound_name}...")
         self._set_busy_cursor()
         try:
-            fig = SOLISPlotter().plot_ph_spectrum_mpl(ph_file)
+            fig = SOLISPlotter(style=self.plot_style).plot_ph_spectrum_mpl(ph_file)
+            fig.solis_replot = lambda f=ph_file: SOLISPlotter(style=self.plot_style).plot_ph_spectrum_mpl(f)
             self._show_plot(f"ph_{compound_name}", f"Ph Spectrum - {compound_name}", fig)
             self._restore_cursor()
             self.status_label.setText(f"Ph spectrum opened: {compound_name}")
@@ -2980,8 +3074,11 @@ class SOLISMainWindow(QMainWindow):
         self.status_label.setText(f"Creating Abs + Ph overlay for {compound_name}...")
         self._set_busy_cursor()
         try:
-            fig = SOLISPlotter().plot_spectra_overlay_mpl(
+            fig = SOLISPlotter(style=self.plot_style).plot_spectra_overlay_mpl(
                 compound_name, abs_file=abs_file, ph_file=ph_file
+            )
+            fig.solis_replot = lambda cn=compound_name, af=abs_file, pf=ph_file: (
+                SOLISPlotter(style=self.plot_style).plot_spectra_overlay_mpl(cn, abs_file=af, ph_file=pf)
             )
             self._show_plot(f"ph_overlay_{compound_name}", f"Abs + Ph Overlay - {compound_name}", fig)
             self._restore_cursor()
@@ -3003,7 +3100,8 @@ class SOLISMainWindow(QMainWindow):
         self.status_label.setText(f"Creating merged Ph plot ({len(ph_files)} compounds)...")
         self._set_busy_cursor()
         try:
-            fig = SOLISPlotter().plot_merged_ph_spectra_mpl(ph_files)
+            fig = SOLISPlotter(style=self.plot_style).plot_merged_ph_spectra_mpl(ph_files)
+            fig.solis_replot = lambda pf=ph_files: SOLISPlotter(style=self.plot_style).plot_merged_ph_spectra_mpl(pf)
             plot_id = "ph_merged_" + "_".join(compound_names) if len(compound_names) <= 3 else f"ph_merged_{len(ph_files)}"
             title = "Ph Spectra: " + ", ".join(compound_names) if len(compound_names) <= 3 else f"Ph Spectra ({len(ph_files)} compounds)"
             self._show_plot(plot_id, title, fig)
@@ -3226,7 +3324,10 @@ class SOLISMainWindow(QMainWindow):
         from plotting.variable_study_plotter import plot_alpha_vs_absorption_mpl
 
         try:
-            fig, regression_stats = plot_alpha_vs_absorption_mpl(selected_items, ei_unit)
+            fig, regression_stats = plot_alpha_vs_absorption_mpl(selected_items, ei_unit, style=self.plot_style)
+            fig.solis_replot = lambda si=selected_items, eu=ei_unit: (
+                plot_alpha_vs_absorption_mpl(si, eu, style=self.plot_style)[0]
+            )
 
             # Show in plot viewer
             plot_id = "Alpha_vs_Absorption"
@@ -3250,7 +3351,10 @@ class SOLISMainWindow(QMainWindow):
         from plotting.variable_study_plotter import plot_alpha_vs_intensity_mpl
 
         try:
-            fig, regression_stats = plot_alpha_vs_intensity_mpl(selected_items, ei_unit)
+            fig, regression_stats = plot_alpha_vs_intensity_mpl(selected_items, ei_unit, style=self.plot_style)
+            fig.solis_replot = lambda si=selected_items, eu=ei_unit: (
+                plot_alpha_vs_intensity_mpl(si, eu, style=self.plot_style)[0]
+            )
 
             # Show in plot viewer
             plot_id = "Alpha_vs_Intensity"

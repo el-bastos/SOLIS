@@ -12,7 +12,7 @@ Session 14: Migrated from Plotly/QWebEngineView to matplotlib for reliability
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QDoubleSpinBox,
-    QLabel, QToolBar, QMessageBox, QFileDialog, QSizePolicy
+    QLabel, QToolBar, QMessageBox, QFileDialog, QSizePolicy, QMenu
 )
 from PyQt6.QtCore import pyqtSignal, Qt
 from PyQt6.QtGui import QAction
@@ -30,6 +30,43 @@ import matplotlib.pyplot as plt
 from utils.logger_config import get_logger
 
 logger = get_logger(__name__)
+
+
+def _fix_ylabel_horizontal(fig):
+    """Make all y-axis labels horizontal for readability."""
+    for ax in fig.get_axes():
+        label = ax.yaxis.label
+        if label.get_text():
+            label.set_rotation(0)
+            label.set_ha('right')
+            label.set_va('center')
+
+
+def _savefig_with_style(fig, filename, fmt, canvas=None):
+    """WYSIWYG export — saves figure at its current display size.
+
+    Uses a temporary Agg canvas to avoid Qt canvas lifecycle issues.
+    Reads fig.solis_export_dpi (int, default 300) for resolution.
+    """
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+
+    export_dpi = getattr(fig, 'solis_export_dpi', 300)
+    original_canvas = fig.canvas
+
+    try:
+        FigureCanvasAgg(fig)
+        kwargs = {'format': fmt, 'bbox_inches': 'tight'}
+        if fmt in ('png', 'pdf'):
+            kwargs['dpi'] = export_dpi
+        fig.savefig(filename, **kwargs)
+    finally:
+        restore = canvas if canvas is not None else original_canvas
+        if restore is not None:
+            try:
+                fig.set_canvas(restore)
+                restore.draw_idle()
+            except RuntimeError:
+                pass
 
 
 class PlotViewerWidget(QWidget):
@@ -117,6 +154,13 @@ class PlotViewerWidget(QWidget):
         self._canvas_placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._canvas_placeholder.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         layout.addWidget(self._canvas_placeholder, stretch=1)
+
+        # === Plot width bar (WYSIWYG export sizing) ===
+        from gui.plot_width_bar import PlotWidthBar
+        self._width_bar = PlotWidthBar()
+        self._width_bar.width_changed.connect(self._on_width_changed)
+        self._width_bar.dpi_changed.connect(self._on_dpi_changed)
+        layout.addWidget(self._width_bar)
 
         # === Mask control panel (initially hidden) ===
         self.mask_panel = QWidget()
@@ -270,8 +314,7 @@ class PlotViewerWidget(QWidget):
 
         if filename:
             try:
-                # Use matplotlib's native PDF export (vector format)
-                self.current_fig.savefig(filename, format='pdf', dpi=300, bbox_inches='tight')
+                _savefig_with_style(self.current_fig, filename, 'pdf', canvas=self.canvas)
                 logger.info(f"Plot exported to PDF: {filename}")
                 QMessageBox.information(self, "Export Complete", f"Plot exported to:\n{filename}")
             except Exception as e:
@@ -295,7 +338,7 @@ class PlotViewerWidget(QWidget):
 
         if filename:
             try:
-                self.current_fig.savefig(filename, format='svg', bbox_inches='tight')
+                _savefig_with_style(self.current_fig, filename, 'svg', canvas=self.canvas)
                 logger.info(f"Plot exported to SVG: {filename}")
                 QMessageBox.information(self, "Export Complete", f"Plot exported to:\n{filename}")
             except Exception as e:
@@ -319,7 +362,7 @@ class PlotViewerWidget(QWidget):
 
         if filename:
             try:
-                self.current_fig.savefig(filename, format='png', dpi=300, bbox_inches='tight')
+                _savefig_with_style(self.current_fig, filename, 'png', canvas=self.canvas)
                 logger.info(f"Plot exported to PNG: {filename}")
                 QMessageBox.information(self, "Export Complete", f"Plot exported to:\n{filename}")
             except Exception as e:
@@ -1083,7 +1126,12 @@ class PlotViewerWidget(QWidget):
         # Extract attached data for CSV export
         if hasattr(fig, 'solis_export_data'):
             # Result plot with export data - use it
-            self.current_data = fig.solis_export_data
+            # solis_export_data may be a callable (lazy builder) or a dict
+            export_attr = fig.solis_export_data
+            if callable(export_attr):
+                self.current_data = export_attr()
+            else:
+                self.current_data = export_attr
             logger.info("Extracted export data from figure")
         else:
             # No export data - could be preview plot or result plot without data
@@ -1109,6 +1157,10 @@ class PlotViewerWidget(QWidget):
             self.canvas = FigureCanvas(fig)
             self.canvas.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
+            # Right-click context menu
+            self.canvas.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+            self.canvas.customContextMenuRequested.connect(self._show_context_menu)
+
             # Create matplotlib navigation toolbar (zoom, pan, home, save)
             if self._mpl_toolbar is not None:
                 layout = self.layout()
@@ -1130,6 +1182,12 @@ class PlotViewerWidget(QWidget):
                 layout.insertWidget(1, self._mpl_toolbar)
                 layout.insertWidget(2, self.canvas, stretch=1)
 
+            # Hook canvas resize to update width bar size label
+            self.canvas.installEventFilter(self)
+
+            # Horizontal y-axis labels
+            _fix_ylabel_horizontal(fig)
+
             # Draw the canvas
             self.canvas.draw()
             logger.info("Matplotlib figure displayed successfully")
@@ -1150,6 +1208,85 @@ class PlotViewerWidget(QWidget):
             Current figure, or None if no figure is displayed
         """
         return self.current_fig
+
+    def _show_context_menu(self, pos):
+        """Show right-click context menu on canvas."""
+        menu = QMenu(self)
+        menu.addAction("Plot Appearance...").triggered.connect(self._open_appearance_dialog)
+        menu.addSeparator()
+        menu.addAction("Export PDF...").triggered.connect(self._export_pdf)
+        menu.addAction("Export SVG...").triggered.connect(self._export_svg)
+        menu.addAction("Export PNG...").triggered.connect(self._export_png)
+        menu.addAction("Export CSV...").triggered.connect(self._export_csv)
+        menu.addSeparator()
+        menu.addAction("Export to Origin (.opju)...").triggered.connect(self._export_origin)
+        menu.exec(self.canvas.mapToGlobal(pos))
+
+    # -----------------------------------------------------------------
+    # Width bar handlers
+    # -----------------------------------------------------------------
+
+    def _on_width_changed(self, max_px: int):
+        """Handle width preset change from PlotWidthBar."""
+        if self.canvas is None:
+            return
+        if max_px == 0:
+            self.canvas.setMaximumWidth(16777215)  # QWIDGETSIZE_MAX — auto fill
+        else:
+            self.canvas.setMaximumWidth(max_px)
+
+    def _on_dpi_changed(self, dpi: int):
+        """Store export DPI on the current figure."""
+        if self.current_fig is not None:
+            self.current_fig.solis_export_dpi = dpi
+
+    def eventFilter(self, obj, event):
+        """Catch canvas resize to update width bar size label."""
+        from PyQt6.QtCore import QEvent
+        if obj is self.canvas and event.type() == QEvent.Type.Resize:
+            self._width_bar.update_size_label(
+                event.size().width(), event.size().height()
+            )
+        return super().eventFilter(obj, event)
+
+    def _export_origin(self):
+        """Export current plot to Origin .opju file."""
+        if not self.current_fig:
+            QMessageBox.warning(self, "No Plot", "No plot available to export.")
+            return
+
+        safe_title = self.plot_title.replace(":", "_").replace("<", "_").replace(">", "_").replace('"', "_").replace("/", "_").replace("\\", "_").replace("|", "_").replace("?", "_").replace("*", "_")
+
+        filename, _ = QFileDialog.getSaveFileName(
+            self, "Export to Origin Project",
+            f"{safe_title}.opju", "Origin Project Files (*.opju)"
+        )
+        if filename:
+            try:
+                from gui.origin_exporter import export_figure_to_origin
+                export_figure_to_origin(self.current_fig, filename)
+                logger.info(f"Plot exported to Origin: {filename}")
+                QMessageBox.information(self, "Export Complete",
+                                        f"Origin project saved to:\n{filename}\n\n"
+                                        "Origin has been left open for inspection.")
+            except ImportError:
+                logger.error("originpro package not available")
+                QMessageBox.critical(self, "Export Error",
+                                     "The 'originpro' package is not installed.\n"
+                                     "Install with: pip install originpro\n"
+                                     "Requires OriginLab 2021+ installed.")
+            except Exception as e:
+                logger.error(f"Origin export failed: {e}")
+                QMessageBox.critical(self, "Export Error",
+                                     f"Failed to export to Origin:\n{str(e)}")
+
+    def _open_appearance_dialog(self):
+        """Open the Plot Appearance dialog for the current figure."""
+        from gui.plot_appearance_dialog import PlotAppearanceDialog
+        if not self.current_fig or not self.canvas:
+            return
+        dialog = PlotAppearanceDialog(self.current_fig, self.canvas, parent=self)
+        dialog.exec()
 
     def clear_plot(self):
         """Clear the current plot and show welcome message."""

@@ -24,6 +24,7 @@ from matplotlib.gridspec import GridSpec
 import matplotlib.pyplot as plt
 
 from core.kinetics_dataclasses import KineticsResult, SNRResult
+from plotting.plot_style import PlotStyle
 
 logger = logging.getLogger(__name__)
 
@@ -101,17 +102,29 @@ class SOLISPlotter:
     - Vector PDF export via kaleido
     """
 
-    def __init__(self, output_dir: Optional[Union[str, Path]] = None):
+    def __init__(self, output_dir: Optional[Union[str, Path]] = None,
+                 style: Optional[PlotStyle] = None):
         """
         Initialize SOLIS plotter.
 
         Args:
             output_dir: Directory for exported plots (default: current directory)
+            style: PlotStyle configuration (default: PlotStyle() with legacy defaults)
         """
         self.output_dir = Path(output_dir) if output_dir else Path.cwd()
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.style = style or PlotStyle()
 
         logger.info(f"SOLISPlotter initialized: output_dir={self.output_dir}")
+
+    def _create_figure(self, category: str, dpi: int = 100, **kwargs) -> Figure:
+        """Create a Figure with style-driven figsize and font family."""
+        figsize = self.style.get_figsize(category)
+        fig = Figure(figsize=figsize, dpi=dpi, **kwargs)
+        fig.solis_plot_category = category
+        fig.solis_plot_style = self.style
+        matplotlib.rc('font', family=self.style.font_family)
+        return fig
 
     # === MATPLOTLIB PLOTTING METHODS (Session 14) ===
 
@@ -140,11 +153,12 @@ class SOLISPlotter:
             Matplotlib Figure object ready for display or export
         """
         # Create figure with GridSpec layout (85% top, 15% bottom)
-        # OPTIMIZED: Use constrained_layout instead of tight_layout (40-60% faster)
-        fig = Figure(figsize=(7, 8), dpi=100, constrained_layout=True)
+        fig = self._create_figure('decay_single', constrained_layout=True)
         gs = GridSpec(2, 1, figure=fig, height_ratios=[0.85, 0.15], hspace=0.05)
         ax_main = fig.add_subplot(gs[0])
         ax_res = fig.add_subplot(gs[1], sharex=ax_main)
+
+        s = self.style  # shorthand
 
         # Extract data
         time = result.time_experiment_us
@@ -164,17 +178,17 @@ class SOLISPlotter:
 
         # === TOP PANEL: Decay curve ===
         # Plot experimental data (gray points)
-        ax_main.plot(time, intensity, 'o', color='#646464', markersize=3,
+        ax_main.plot(time, intensity, 'o', color=s.color_data, markersize=s.markersize_data,
                     alpha=0.6, label='Experimental', zorder=1)
 
         # Plot Main model fit (red line)
-        ax_main.plot(time, main_curve, '-', color=COLORS['fit_main'], linewidth=2,
-                    label='Main, f(t; t₀)', zorder=2)
+        ax_main.plot(time, main_curve, '-', color=s.color_fit, linewidth=s.linewidth_fit,
+                    label='Main, f(t; t\u2080)', zorder=2)
 
         # Plot Literature model fit (orange line) if available
         if show_literature and result.literature.success and result.literature.curve is not None:
-            ax_main.plot(time, result.literature.curve, '-', color=COLORS['fit_literature'],
-                        linewidth=2, label='Literature, f(t)', zorder=2)
+            ax_main.plot(time, result.literature.curve, '-', color=s.color_fit_alt,
+                        linewidth=s.linewidth_fit, label='Literature, f(t)', zorder=2)
 
         # Axis settings for main panel
         if log_x:
@@ -188,16 +202,16 @@ class SOLISPlotter:
         ax_main.set_ylim(bottom=0, auto=True)
         ax_main.autoscale(enable=True, axis='y', tight=False)
 
-        ax_main.set_ylabel('Intensity (counts)', fontsize=12)
-        ax_main.legend(loc='upper right', fontsize=10, framealpha=0.8)
-        ax_main.grid(True, alpha=0.3)
+        ax_main.set_ylabel('Intensity (counts)', fontsize=s.font_size_axis_label)
+        ax_main.legend(loc='upper right', fontsize=s.font_size_legend, framealpha=0.8)
+        s.configure_grid(ax_main)
 
         # Remove x-axis labels from top panel (shared with bottom)
         ax_main.tick_params(labelbottom=False)
 
         # === BOTTOM PANEL: Residuals ===
         # Main model residuals (red)
-        ax_res.plot(time_residuals, main_residuals_filtered, 'o', color=COLORS['residuals_main'],
+        ax_res.plot(time_residuals, main_residuals_filtered, 'o', color=s.color_residuals,
                    markersize=2, label='WRes Main', zorder=2)
 
         # Literature model residuals (orange) if available
@@ -206,11 +220,11 @@ class SOLISPlotter:
                 lit_residuals_filtered = result.literature.weighted_residuals[result.fitting_mask]
             else:
                 lit_residuals_filtered = result.literature.weighted_residuals
-            ax_res.plot(time_residuals, lit_residuals_filtered, 'o', color=COLORS['residuals_lit'],
+            ax_res.plot(time_residuals, lit_residuals_filtered, 'o', color=s.color_fit_alt,
                        markersize=2, label='WRes Lit', zorder=2)
 
         # Zero line
-        ax_res.axhline(y=0, color=COLORS['zero_line'], linewidth=1, linestyle='solid', zorder=1)
+        ax_res.axhline(y=0, color=COLORS['zero_line'], linewidth=s.linewidth_residuals, linestyle='solid', zorder=1)
 
         # Axis settings for residuals panel (ignore NaN)
         max_abs_residual = np.nanmax(np.abs(main_residuals_filtered))
@@ -219,13 +233,13 @@ class SOLISPlotter:
         else:
             residual_limit = np.ceil(max_abs_residual)
         ax_res.set_ylim(-residual_limit, residual_limit)
-        ax_res.set_ylabel('Weighted\nResiduals', fontsize=10)
-        ax_res.set_xlabel('Time (μs)', fontsize=12)
-        ax_res.grid(True, alpha=0.3)
+        ax_res.set_ylabel('Weighted\nResiduals', fontsize=s.font_size_tick_label)
+        ax_res.set_xlabel('Time (\u03bcs)', fontsize=s.font_size_axis_label)
+        s.configure_grid(ax_res)
 
         # Add title if provided
         if title:
-            fig.suptitle(title, fontsize=14)
+            fig.suptitle(title, fontsize=s.font_size_title)
 
         # Layout handled by constrained_layout (set at Figure creation)
 
@@ -287,11 +301,12 @@ class SOLISPlotter:
             Matplotlib figure with mean curves and SD envelopes
         """
         # Create figure with GridSpec layout
-        # OPTIMIZED: Use constrained_layout instead of tight_layout (40-60% faster)
-        fig = Figure(figsize=(7, 8), dpi=100, constrained_layout=True)
+        fig = self._create_figure('decay_mean', constrained_layout=True)
         gs = GridSpec(2, 1, figure=fig, height_ratios=[0.85, 0.15], hspace=0.05)
         ax_main = fig.add_subplot(gs[0])
         ax_res = fig.add_subplot(gs[1], sharex=ax_main)
+
+        s = self.style  # shorthand
 
         # Extract data
         time = mean_arrays['mean_time_experiment_us']
@@ -326,15 +341,15 @@ class SOLISPlotter:
         # === TOP PANEL: Decay curve with SD envelopes ===
         # Plot experimental data SD envelope (gray)
         ax_main.fill_between(time, mean_intensity - sd_intensity, mean_intensity + sd_intensity,
-                            color='#646464', alpha=0.2, label='Data ± SD')
+                            color=s.color_data, alpha=0.2, label='Data \u00b1 SD')
         # Plot mean experimental data (gray line)
-        ax_main.plot(time, mean_intensity, '-', color='#646464', linewidth=1.5)
+        ax_main.plot(time, mean_intensity, '-', color=s.color_data, linewidth=s.linewidth_data)
 
         # Plot fit SD envelope (red)
         ax_main.fill_between(time, mean_fit - sd_fit, mean_fit + sd_fit,
-                            color=COLORS['fit_main'], alpha=0.2, label='Fit ± SD')
+                            color=s.color_fit, alpha=0.2, label='Fit \u00b1 SD')
         # Plot mean fit (bold red line)
-        ax_main.plot(time, mean_fit, '-', color=COLORS['fit_main'], linewidth=3, label='Mean Fit')
+        ax_main.plot(time, mean_fit, '-', color=s.color_fit, linewidth=s.linewidth_fit + 1, label='Mean Fit')
 
         # Axis settings for main panel
         if log_x:
@@ -348,9 +363,9 @@ class SOLISPlotter:
         ax_main.set_ylim(bottom=0, auto=True)
         ax_main.autoscale(enable=True, axis='y', tight=False)
 
-        ax_main.set_ylabel('Intensity (counts)', fontsize=12)
-        ax_main.legend(loc='upper right', fontsize=10, framealpha=0.8)
-        ax_main.grid(True, alpha=0.3)
+        ax_main.set_ylabel('Intensity (counts)', fontsize=s.font_size_axis_label)
+        ax_main.legend(loc='upper right', fontsize=s.font_size_legend, framealpha=0.8)
+        s.configure_grid(ax_main)
         ax_main.tick_params(labelbottom=False)
 
         # === BOTTOM PANEL: Residuals with SD envelope ===
@@ -358,13 +373,13 @@ class SOLISPlotter:
         ax_res.fill_between(time_residuals,
                            mean_residuals_filtered - sd_residuals_filtered,
                            mean_residuals_filtered + sd_residuals_filtered,
-                           color=COLORS['residuals_main'], alpha=0.2)
+                           color=s.color_residuals, alpha=0.2)
         # Plot mean residuals (red points)
-        ax_res.plot(time_residuals, mean_residuals_filtered, 'o', color=COLORS['residuals_main'],
+        ax_res.plot(time_residuals, mean_residuals_filtered, 'o', color=s.color_residuals,
                    markersize=2)
 
         # Zero line
-        ax_res.axhline(y=0, color=COLORS['zero_line'], linewidth=1, linestyle='dashed', zorder=1)
+        ax_res.axhline(y=0, color=COLORS['zero_line'], linewidth=s.linewidth_residuals, linestyle='dashed', zorder=1)
 
         # Axis settings for residuals panel (ignore NaN)
         max_abs_residual = np.nanmax(np.abs(mean_residuals_filtered + sd_residuals_filtered))
@@ -373,12 +388,12 @@ class SOLISPlotter:
         else:
             residual_limit = np.ceil(max_abs_residual)
         ax_res.set_ylim(-residual_limit, residual_limit)
-        ax_res.set_ylabel('Weighted\nResiduals', fontsize=10)
-        ax_res.set_xlabel('Time (μs)', fontsize=12)
-        ax_res.grid(True, alpha=0.3)
+        ax_res.set_ylabel('Weighted\nResiduals', fontsize=s.font_size_tick_label)
+        ax_res.set_xlabel('Time (\u03bcs)', fontsize=s.font_size_axis_label)
+        s.configure_grid(ax_res)
 
         # Add title
-        fig.suptitle(title, fontsize=14)
+        fig.suptitle(title, fontsize=s.font_size_title)
 
         # Layout handled by constrained_layout (set at Figure creation)
 
@@ -432,11 +447,12 @@ class SOLISPlotter:
             raise ValueError("No results provided for batch summary")
 
         # Create figure with GridSpec layout
-        # OPTIMIZED: Use constrained_layout instead of tight_layout (40-60% faster)
-        fig = Figure(figsize=(7, 8), dpi=100, constrained_layout=True)
+        fig = self._create_figure('decay_batch', constrained_layout=True)
         gs = GridSpec(2, 1, figure=fig, height_ratios=[0.85, 0.15], hspace=0.05)
         ax_main = fig.add_subplot(gs[0])
         ax_res = fig.add_subplot(gs[1], sharex=ax_main)
+
+        s = self.style  # shorthand
 
         # Number of replicates
         n_reps = len(results)
@@ -464,16 +480,16 @@ class SOLISPlotter:
             all_residuals.append(main_residuals_filtered)
 
             # Plot experimental data
-            ax_main.plot(time, intensity, 'o', color='#646464', markersize=3,
+            ax_main.plot(time, intensity, 'o', color=s.color_data, markersize=s.markersize_data,
                         alpha=rep_alphas[i], label=f'Rep {i+1} Data', zorder=1)
 
             # Plot fit
-            ax_main.plot(time, main_curve, '-', color=COLORS['fit_main'], linewidth=1.5,
+            ax_main.plot(time, main_curve, '-', color=s.color_fit, linewidth=s.linewidth_data,
                         alpha=0.6, zorder=2)
 
             # Plot residuals
             ax_res.plot(time_residuals, main_residuals_filtered, 'o',
-                       color=COLORS['residuals_main'], markersize=2, alpha=0.5, zorder=1)
+                       color=s.color_residuals, markersize=2, alpha=0.5, zorder=1)
 
         # === Calculate and plot mean curve if requested ===
         # OPTIMIZED Phase 3: Cache mean curve calculation for reuse in export
@@ -487,19 +503,19 @@ class SOLISPlotter:
             time = results[0].time_experiment_us[:min_length]
 
             # Mean curve (bold red)
-            ax_main.plot(time, mean_curve_cached, '-', color=COLORS['fit_main'], linewidth=3,
+            ax_main.plot(time, mean_curve_cached, '-', color=s.color_fit, linewidth=s.linewidth_fit + 1,
                         label='Mean Fit', zorder=3)
 
-            # Error bands (±1 SD)
+            # Error bands
             ax_main.fill_between(time, mean_curve_cached - std_curve_cached, mean_curve_cached + std_curve_cached,
-                                color=COLORS['fit_main'], alpha=0.2, label='±1 SD', zorder=2)
+                                color=s.color_fit, alpha=0.2, label='\u00b11 SD', zorder=2)
 
         # === Add statistics annotation if requested ===
         if show_statistics:
             self._add_batch_statistics_mpl(fig, ax_main, results)
 
         # === Zero line for residuals ===
-        ax_res.axhline(y=0, color=COLORS['zero_line'], linewidth=1, linestyle='solid', zorder=0)
+        ax_res.axhline(y=0, color=COLORS['zero_line'], linewidth=s.linewidth_residuals, linestyle='solid', zorder=0)
 
         # === Axis settings ===
         # X-axis
@@ -533,18 +549,18 @@ class SOLISPlotter:
             ax_res.set_ylim(-residual_limit, residual_limit)
 
         # Labels and legend
-        ax_main.set_ylabel('Intensity (counts)', fontsize=12)
-        ax_main.legend(loc='upper right', fontsize=9, framealpha=0.8)
-        ax_main.grid(True, alpha=0.3)
+        ax_main.set_ylabel('Intensity (counts)', fontsize=s.font_size_axis_label)
+        ax_main.legend(loc='upper right', fontsize=s.font_size_annotation, framealpha=0.8)
+        s.configure_grid(ax_main)
         ax_main.tick_params(labelbottom=False)
 
-        ax_res.set_ylabel('Weighted\nResiduals', fontsize=10)
-        ax_res.set_xlabel('Time (μs)', fontsize=12)
-        ax_res.grid(True, alpha=0.3)
+        ax_res.set_ylabel('Weighted\nResiduals', fontsize=s.font_size_tick_label)
+        ax_res.set_xlabel('Time (\u03bcs)', fontsize=s.font_size_axis_label)
+        s.configure_grid(ax_res)
 
         # Add title if provided
         if title:
-            fig.suptitle(title, fontsize=14)
+            fig.suptitle(title, fontsize=s.font_size_title)
 
         # Layout handled by constrained_layout (set at Figure creation)
 
@@ -606,7 +622,7 @@ class SOLISPlotter:
 
         # Add text box to upper left corner
         ax.text(0.02, 0.98, stats_text, transform=ax.transAxes,
-               fontsize=9, verticalalignment='top', horizontalalignment='left',
+               fontsize=self.style.font_size_annotation, verticalalignment='top', horizontalalignment='left',
                bbox=dict(boxstyle='round', facecolor='white', alpha=0.8, edgecolor='black', linewidth=1))
 
     def plot_merged_decay_mpl(
@@ -651,9 +667,10 @@ class SOLISPlotter:
 
         row_heights = [decay_height] + [residual_height] * n_datasets
 
-        # OPTIMIZED: Use constrained_layout instead of tight_layout (40-60% faster)
-        fig = Figure(figsize=(7, 10), dpi=100, constrained_layout=True)
+        fig = self._create_figure('decay_merged', constrained_layout=True)
         gs = GridSpec(n_datasets + 1, 1, figure=fig, height_ratios=row_heights, hspace=0.05)
+
+        s = self.style  # shorthand
 
         # Create axes
         ax_main = fig.add_subplot(gs[0])
@@ -697,9 +714,9 @@ class SOLISPlotter:
                 ax_main.fill_between(time, mean_intensity - sd_intensity, mean_intensity + sd_intensity,
                                     color=color, alpha=0.2, label=f'{compound} ± SD')
                 # Mean data points
-                ax_main.plot(time, mean_intensity, 'o', color=color, markersize=3, alpha=0.6)
+                ax_main.plot(time, mean_intensity, 'o', color=color, markersize=s.markersize_data, alpha=0.6)
                 # Mean fit line
-                ax_main.plot(time, mean_fit, '-', color=color, linewidth=2, label=f'{compound} Fit')
+                ax_main.plot(time, mean_fit, '-', color=color, linewidth=s.linewidth_fit, label=f'{compound} Fit')
 
                 # === Residuals in separate panel ===
                 ax_res = ax_residuals[idx]
@@ -722,7 +739,7 @@ class SOLISPlotter:
                                    mean_residuals_filtered + sd_residuals_filtered,
                                    color=color, alpha=0.2)
                 # Mean residuals
-                ax_res.plot(time_residuals, mean_residuals_filtered, '-', color=color, linewidth=1)
+                ax_res.plot(time_residuals, mean_residuals_filtered, '-', color=color, linewidth=s.linewidth_residuals)
 
                 # Calculate residual limit for this panel (ignore NaN)
                 max_abs_residual = np.nanmax(np.abs(mean_residuals_filtered + sd_residuals_filtered))
@@ -753,10 +770,10 @@ class SOLISPlotter:
                 max_intensity_values.append(np.nanmax(unmasked_intensity) * 1.1)
 
                 # Data points
-                ax_main.plot(time, intensity, 'o', color=color, markersize=3, alpha=0.6,
+                ax_main.plot(time, intensity, 'o', color=color, markersize=s.markersize_data, alpha=0.6,
                             label=f'{compound} Rep{rep_num}')
                 # Fit line
-                ax_main.plot(time, fit, '-', color=color, linewidth=2)
+                ax_main.plot(time, fit, '-', color=color, linewidth=s.linewidth_fit)
 
                 # === Residuals in separate panel ===
                 ax_res = ax_residuals[idx]
@@ -772,7 +789,7 @@ class SOLISPlotter:
                     residuals_filtered = residuals
 
                 # Plot residuals
-                ax_res.plot(time_residuals, residuals_filtered, '-', color=color, linewidth=1)
+                ax_res.plot(time_residuals, residuals_filtered, '-', color=color, linewidth=s.linewidth_residuals)
 
                 # Calculate residual limit for this panel (ignore NaN)
                 max_abs_residual = np.nanmax(np.abs(residuals_filtered))
@@ -789,9 +806,9 @@ class SOLISPlotter:
                 ax_res.set_ylim(-residual_limits[idx], residual_limits[idx])
 
             # Residual panel formatting
-            ax_res.set_ylabel('WRes', fontsize=9)
-            ax_res.grid(True, alpha=0.3)
-            ax_res.tick_params(labelsize=9)
+            ax_res.set_ylabel('WRes', fontsize=s.font_size_annotation)
+            s.configure_grid(ax_res)
+            ax_res.tick_params(labelsize=s.font_size_annotation)
 
             # Only show x-axis label on bottom panel
             if idx < n_datasets - 1:
@@ -810,16 +827,16 @@ class SOLISPlotter:
         ax_main.set_ylim(bottom=0, auto=True)
         ax_main.autoscale(enable=True, axis='y', tight=False)
 
-        ax_main.set_ylabel('Intensity (counts)', fontsize=12)
-        ax_main.legend(loc='upper right', fontsize=9, framealpha=0.8)
-        ax_main.grid(True, alpha=0.3)
+        ax_main.set_ylabel('Intensity (counts)', fontsize=s.font_size_axis_label)
+        ax_main.legend(loc='upper right', fontsize=s.font_size_annotation, framealpha=0.8)
+        s.configure_grid(ax_main)
         ax_main.tick_params(labelbottom=False)
 
         # Add title
-        fig.suptitle(title, fontsize=14, y=0.98)
+        fig.suptitle(title, fontsize=s.font_size_title, y=0.98)
 
         # Bottom residual panel gets x-axis label
-        ax_residuals[-1].set_xlabel('Time (μs)', fontsize=12)
+        ax_residuals[-1].set_xlabel('Time (\u03bcs)', fontsize=s.font_size_axis_label)
 
         # Layout handled by constrained_layout (set at Figure creation)
 
@@ -904,9 +921,10 @@ class SOLISPlotter:
         logger.info("Creating comprehensive surplus analysis plot (matplotlib)")
 
         # Create figure with 4 panels
-        # OPTIMIZED: Use constrained_layout instead of tight_layout (40-60% faster)
-        fig = Figure(figsize=(12, 10), constrained_layout=True)
+        fig = self._create_figure('surplus', constrained_layout=True)
         gs = GridSpec(4, 1, figure=fig, height_ratios=[0.3, 0.25, 0.3, 0.15], hspace=0.15)
+
+        s = self.style  # shorthand
 
         ax1 = fig.add_subplot(gs[0])  # Step 1: Late-time fit
         ax2 = fig.add_subplot(gs[1], sharex=ax1)  # Step 2: Surplus
@@ -931,26 +949,26 @@ class SOLISPlotter:
 
         ax1.axvline(mask_time, color='gray', linestyle=':', linewidth=1.5,
                    label=f'Mask at {mask_time:.1f} μs', zorder=1)
-        ax1.set_ylabel('Counts', fontsize=11)
-        ax1.legend(loc='upper right', fontsize=8)
-        ax1.grid(True, alpha=0.2)
-        ax1.set_title('Step 1: Late-time homogeneous fit', fontsize=11, fontweight='bold')
+        ax1.set_ylabel('Counts', fontsize=s.font_size_axis_label - 1)
+        ax1.legend(loc='upper right', fontsize=s.font_size_annotation - 1)
+        s.configure_grid(ax1)
+        ax1.set_title('Step 1: Late-time homogeneous fit', fontsize=s.font_size_axis_label - 1, fontweight=s.font_weight_title)
         ax1.tick_params(labelbottom=False)
 
         # === Panel 2: Step 2 & 3 - Surplus signal and fit ===
         ax2.scatter(time, surplus_result.surplus_signal, s=15, alpha=0.6,
-                   color='#FF8C00', label='Surplus = Raw - Late fit', zorder=2)
+                   color=s.color_fit_alt, label='Surplus = Raw - Late fit', zorder=2)
 
         # Show surplus fit (Step 3)
-        ax2.plot(time, surplus_result.surplus_fit_curve, 'g-', linewidth=2.5,
-                label=f'Surplus fit (R²={surplus_result.surplus_fit_r2:.3f})', zorder=3)
+        ax2.plot(time, surplus_result.surplus_fit_curve, 'g-', linewidth=s.linewidth_fit + 0.5,
+                label=f'Surplus fit (R\u00b2={surplus_result.surplus_fit_r2:.3f})', zorder=3)
 
-        ax2.axhline(0, color='black', linestyle='-', linewidth=1, alpha=0.3, zorder=1)
+        ax2.axhline(0, color='black', linestyle='-', linewidth=s.linewidth_residuals, alpha=0.3, zorder=1)
         ax2.axvline(mask_time, color='gray', linestyle=':', linewidth=1.5, zorder=1)
-        ax2.set_ylabel('Surplus', fontsize=11)
-        ax2.legend(loc='upper right', fontsize=8)
-        ax2.grid(True, alpha=0.2)
-        ax2.set_title('Steps 2 & 3: Surplus signal and fit', fontsize=11, fontweight='bold')
+        ax2.set_ylabel('Surplus', fontsize=s.font_size_axis_label - 1)
+        ax2.legend(loc='upper right', fontsize=s.font_size_annotation - 1)
+        s.configure_grid(ax2)
+        ax2.set_title('Steps 2 & 3: Surplus signal and fit', fontsize=s.font_size_axis_label - 1, fontweight=s.font_weight_title)
         ax2.tick_params(labelbottom=False)
 
         # === Panel 3: Step 4 - Final heterogeneous fit ===
@@ -961,10 +979,10 @@ class SOLISPlotter:
                 label=f'Heterogeneous fit, Eq. (4) (R²={surplus_result.final_r2:.3f})', zorder=3)
 
         ax3.axvline(mask_time, color='gray', linestyle=':', linewidth=1.5, zorder=1)
-        ax3.set_ylabel('Counts', fontsize=11)
-        ax3.legend(loc='upper right', fontsize=8)
-        ax3.grid(True, alpha=0.2)
-        ax3.set_title('Step 4: Final heterogeneous fit to raw data', fontsize=11, fontweight='bold')
+        ax3.set_ylabel('Counts', fontsize=s.font_size_axis_label - 1)
+        ax3.legend(loc='upper right', fontsize=s.font_size_annotation - 1)
+        s.configure_grid(ax3)
+        ax3.set_title('Step 4: Final heterogeneous fit to raw data', fontsize=s.font_size_axis_label - 1, fontweight=s.font_weight_title)
         ax3.tick_params(labelbottom=False)
 
         # === Panel 4: Residuals from final fit ===
@@ -977,10 +995,10 @@ class SOLISPlotter:
         weighted_residuals = residuals[valid_mask] / weights
 
         ax4.scatter(time[valid_mask], weighted_residuals, s=10, alpha=0.6, color='darkred', zorder=2)
-        ax4.axhline(0, color=COLORS['zero_line'], linestyle='-', linewidth=1, zorder=1)
-        ax4.set_xlabel('Time (μs)', fontsize=12)
-        ax4.set_ylabel('WR', fontsize=10)
-        ax4.grid(True, alpha=0.2)
+        ax4.axhline(0, color=COLORS['zero_line'], linestyle='-', linewidth=s.linewidth_residuals, zorder=1)
+        ax4.set_xlabel('Time (\u03bcs)', fontsize=s.font_size_axis_label)
+        ax4.set_ylabel('WR', fontsize=s.font_size_tick_label)
+        s.configure_grid(ax4)
 
         # Symmetric y-axis for residuals
         resid_max = np.nanmax(np.abs(weighted_residuals))
@@ -1017,12 +1035,12 @@ class SOLISPlotter:
 
         ax3.text(0.02, 0.98, param_text,
                     transform=ax3.transAxes,
-                    fontsize=9,
+                    fontsize=s.font_size_annotation,
                     verticalalignment='top',
                     bbox=dict(boxstyle='round', facecolor='white', alpha=0.8, edgecolor='black'))
 
         # Title
-        fig.suptitle('Surplus Analysis - Heterogeneous Bi-exponential Fit', fontsize=14, fontweight='bold')
+        fig.suptitle('Surplus Analysis - Heterogeneous Bi-exponential Fit', fontsize=s.font_size_title, fontweight=s.font_weight_title)
 
         # Layout handled by constrained_layout (set at Figure creation)
 
@@ -1090,11 +1108,12 @@ class SOLISPlotter:
         logger.info(f"Creating heterogeneous fit plot for {result.compound_name} ({result.replicate_id})")
 
         # Create figure with 2 panels (85% decay, 15% residuals)
-        # OPTIMIZED: Use constrained_layout instead of tight_layout (40-60% faster)
-        fig = Figure(figsize=(8, 6), constrained_layout=True)
+        fig = self._create_figure('het_fit', constrained_layout=True)
         gs = GridSpec(2, 1, figure=fig, height_ratios=[0.85, 0.15], hspace=0.05)
         ax_decay = fig.add_subplot(gs[0])
         ax_resid = fig.add_subplot(gs[1], sharex=ax_decay)
+
+        s = self.style  # shorthand
 
         # Get data
         time_exp = result.time_exp_us
@@ -1121,7 +1140,7 @@ class SOLISPlotter:
             signal_exp,
             'o',
             color='#808080',
-            markersize=3,
+            markersize=s.markersize_data,
             alpha=0.5,
             label='Experimental',
             zorder=1
@@ -1133,7 +1152,7 @@ class SOLISPlotter:
             signal_fit,
             '-',
             color='#00AA00',
-            linewidth=2,
+            linewidth=s.linewidth_fit,
             label='Fit',
             zorder=3
         )
@@ -1145,8 +1164,8 @@ class SOLISPlotter:
                 lipid_interp,
                 ':',
                 color='#0000FF',
-                linewidth=1.5,
-                label=f'A × n_L, Lipid',
+                linewidth=s.linewidth_data,
+                label=f'A \u00d7 n_L, Lipid',
                 zorder=2
             )
 
@@ -1157,8 +1176,8 @@ class SOLISPlotter:
                 water_interp,
                 ':',
                 color='#FF8C00',
-                linewidth=1.5,
-                label=f'B × n_W, Water',
+                linewidth=s.linewidth_data,
+                label=f'B \u00d7 n_W, Water',
                 zorder=2
             )
 
@@ -1170,10 +1189,10 @@ class SOLISPlotter:
             ax_decay.set_yscale('log')
 
         # Labels and legend
-        ax_decay.set_ylabel('Counts (×10³)', fontsize=11)
-        ax_decay.legend(loc='upper right', fontsize=9, framealpha=0.9)
-        ax_decay.tick_params(axis='both', labelsize=10)
-        ax_decay.grid(True, alpha=0.3, linestyle='--')
+        ax_decay.set_ylabel('Counts (\u00d710\u00b3)', fontsize=s.font_size_axis_label - 1)
+        ax_decay.legend(loc='upper right', fontsize=s.font_size_annotation, framealpha=0.9)
+        ax_decay.tick_params(axis='both', labelsize=s.font_size_tick_label)
+        s.configure_grid(ax_decay)
 
         # Remove x-axis labels from top panel
         ax_decay.tick_params(axis='x', labelbottom=False)
@@ -1190,7 +1209,7 @@ class SOLISPlotter:
             0.02, 0.98,
             params_text,
             transform=ax_decay.transAxes,
-            fontsize=9,
+            fontsize=s.font_size_annotation,
             verticalalignment='top',
             bbox=dict(boxstyle='round', facecolor='white', alpha=0.9, edgecolor='black')
         )
@@ -1203,7 +1222,7 @@ class SOLISPlotter:
                 result.weighted_residuals,
                 '-',
                 color='#00AA00',
-                linewidth=1,
+                linewidth=s.linewidth_residuals,
                 zorder=2
             )
 
@@ -1217,14 +1236,14 @@ class SOLISPlotter:
             else:
                 ax_resid.set_ylim(-3, 3)  # Default if all NaN
 
-        ax_resid.set_xlabel('Time (μs)', fontsize=11)
-        ax_resid.set_ylabel('WRes', fontsize=10)
-        ax_resid.tick_params(axis='both', labelsize=10)
-        ax_resid.grid(True, alpha=0.3, linestyle='--')
+        ax_resid.set_xlabel('Time (μs)', fontsize=s.font_size_axis_label)
+        ax_resid.set_ylabel('WRes', fontsize=s.font_size_tick_label)
+        ax_resid.tick_params(axis='both', labelsize=s.font_size_tick_label)
+        s.configure_grid(ax_resid)
 
         # Title
         title = f'Heterogeneous Fit: {result.compound_name} ({result.replicate_id})'
-        fig.suptitle(title, fontsize=12, fontweight='bold')
+        fig.suptitle(title, fontsize=s.font_size_title, fontweight=s.font_weight_title)
 
         # Layout handled by constrained_layout (set at Figure creation)
 
@@ -1278,14 +1297,14 @@ class SOLISPlotter:
 
         logger.info(f"Creating heterogeneous grid plot for {result.compound_name} ({result.replicate_id})")
 
+        s = self.style  # shorthand
+
         if result.grid_chi2 is None or len(result.grid_chi2) == 0:
             logger.warning("No grid data available for plotting")
-            # Create empty figure with message
-            # OPTIMIZED: Use constrained_layout instead of tight_layout (40-60% faster)
-            fig = Figure(figsize=(6, 5), constrained_layout=True)
+            fig = self._create_figure('het_grid', constrained_layout=True)
             ax = fig.add_subplot(111)
             ax.text(0.5, 0.5, 'No grid data available',
-                   ha='center', va='center', fontsize=14)
+                   ha='center', va='center', fontsize=s.font_size_title)
             ax.set_xticks([])
             ax.set_yticks([])
             return fig
@@ -1313,7 +1332,7 @@ class SOLISPlotter:
             chi2_grid[i_tau_w, i_tau_T] = row['chi2_red']
 
         # Create figure
-        fig = Figure(figsize=(6, 5))
+        fig = self._create_figure('het_grid')
         ax = fig.add_subplot(111)
 
         # Create meshgrid for contour plot
@@ -1335,7 +1354,7 @@ class SOLISPlotter:
             linewidths=0.5,
             alpha=0.5
         )
-        ax.clabel(contour, inline=True, fontsize=8, fmt='%.2f')
+        ax.clabel(contour, inline=True, fontsize=s.font_size_annotation - 1, fmt='%.2f')
 
         # Mark best-fit point
         ax.plot(
@@ -1362,17 +1381,17 @@ class SOLISPlotter:
 
         # Colorbar
         cbar = fig.colorbar(contourf, ax=ax, label='χ²red')
-        cbar.ax.tick_params(labelsize=9)
+        cbar.ax.tick_params(labelsize=s.font_size_annotation)
 
         # Labels and title
-        ax.set_xlabel('τT (μs)', fontsize=11)
-        ax.set_ylabel('τΔW (μs)', fontsize=11)
-        ax.tick_params(axis='both', labelsize=10)
-        ax.legend(loc='upper right', fontsize=9, framealpha=0.9)
-        ax.grid(True, alpha=0.3, linestyle='--')
+        ax.set_xlabel('τT (μs)', fontsize=s.font_size_axis_label)
+        ax.set_ylabel('τΔW (μs)', fontsize=s.font_size_axis_label)
+        ax.tick_params(axis='both', labelsize=s.font_size_tick_label)
+        ax.legend(loc='upper right', fontsize=s.font_size_annotation, framealpha=0.9)
+        s.configure_grid(ax)
 
         title = f'Grid Search Landscape: {result.compound_name} ({result.replicate_id})'
-        fig.suptitle(title, fontsize=12, fontweight='bold')
+        fig.suptitle(title, fontsize=s.font_size_title, fontweight=s.font_weight_title)
 
         # Layout handled by constrained_layout (set at Figure creation)
 
@@ -1434,31 +1453,33 @@ class SOLISPlotter:
         else:
             absorbance = absorbance_cols[:, 0]
 
+        s = self.style  # shorthand
+
         # Create figure
-        fig = Figure(figsize=(8, 5), constrained_layout=True)
+        fig = self._create_figure('spectrum_single', constrained_layout=True)
         ax = fig.add_subplot(111)
 
         # Plot spectrum
-        ax.plot(wavelength, absorbance, 'k-', linewidth=2, label=parsed_file.compound)
+        ax.plot(wavelength, absorbance, 'k-', linewidth=s.linewidth_fit, label=parsed_file.compound)
 
         # Add excitation wavelength markers if provided
         if excitation_wavelengths:
             for ex_wl in excitation_wavelengths:
                 color = wavelength_to_color(ex_wl)
-                ax.axvline(ex_wl, color=color, linestyle='--', linewidth=1.5,
+                ax.axvline(ex_wl, color=color, linestyle='--', linewidth=s.linewidth_data,
                           label=f'λex = {ex_wl:.0f} nm', alpha=0.7)
 
         # Labels and formatting
-        ax.set_xlabel('Wavelength (nm)', fontsize=12)
-        ax.set_ylabel('Absorbance', fontsize=12)
-        ax.tick_params(axis='both', labelsize=10)
-        ax.grid(True, alpha=0.3, linestyle='--')
-        ax.legend(loc='best', fontsize=10)
+        ax.set_xlabel('Wavelength (nm)', fontsize=s.font_size_axis_label)
+        ax.set_ylabel('Absorbance', fontsize=s.font_size_axis_label)
+        ax.tick_params(axis='both', labelsize=s.font_size_tick_label)
+        s.configure_grid(ax)
+        ax.legend(loc='best', fontsize=s.font_size_legend)
 
         # Title
         if title is None:
             title = f'Absorption Spectrum: {parsed_file.compound}'
-        fig.suptitle(title, fontsize=14, fontweight='bold')
+        fig.suptitle(title, fontsize=s.font_size_title, fontweight=s.font_weight_title)
 
         # Attach export data
         export_data = {
@@ -1500,8 +1521,10 @@ class SOLISPlotter:
         """
         logger.info(f"Creating merged absorption spectra plot with {len(parsed_files)} spectra")
 
+        s = self.style  # shorthand
+
         # Create figure
-        fig = Figure(figsize=(10, 6), constrained_layout=True)
+        fig = self._create_figure('spectrum_merged', constrained_layout=True)
         ax = fig.add_subplot(111)
 
         # Track all excitation wavelengths for legend management
@@ -1525,7 +1548,7 @@ class SOLISPlotter:
             color = MERGED_COLORS[idx % len(MERGED_COLORS)]
 
             # Plot spectrum
-            ax.plot(wavelength, absorbance, color=color, linewidth=2,
+            ax.plot(wavelength, absorbance, color=color, linewidth=s.linewidth_fit,
                    label=parsed_file.compound)
 
             # Store in export data
@@ -1539,25 +1562,25 @@ class SOLISPlotter:
                     if ex_wl not in all_ex_wavelengths:
                         # Only add legend entry once per wavelength
                         color = wavelength_to_color(ex_wl)
-                        ax.axvline(ex_wl, color=color, linestyle='--', linewidth=1.5,
+                        ax.axvline(ex_wl, color=color, linestyle='--', linewidth=s.linewidth_data,
                                   label=f'λex = {ex_wl:.0f} nm', alpha=0.7)
                         all_ex_wavelengths.add(ex_wl)
                     else:
                         # Just draw the line without legend entry
                         color = wavelength_to_color(ex_wl)
-                        ax.axvline(ex_wl, color=color, linestyle='--', linewidth=1.5, alpha=0.7)
+                        ax.axvline(ex_wl, color=color, linestyle='--', linewidth=s.linewidth_data, alpha=0.7)
 
         # Labels and formatting
-        ax.set_xlabel('Wavelength (nm)', fontsize=12)
-        ax.set_ylabel('Absorbance', fontsize=12)
-        ax.tick_params(axis='both', labelsize=10)
-        ax.grid(True, alpha=0.3, linestyle='--')
-        ax.legend(loc='best', fontsize=10)
+        ax.set_xlabel('Wavelength (nm)', fontsize=s.font_size_axis_label)
+        ax.set_ylabel('Absorbance', fontsize=s.font_size_axis_label)
+        ax.tick_params(axis='both', labelsize=s.font_size_tick_label)
+        s.configure_grid(ax)
+        ax.legend(loc='best', fontsize=s.font_size_legend)
 
         # Title
         if title is None:
             title = f'Absorption Spectra ({len(parsed_files)} compounds)'
-        fig.suptitle(title, fontsize=14, fontweight='bold')
+        fig.suptitle(title, fontsize=s.font_size_title, fontweight=s.font_weight_title)
 
         # Attach export data
         if excitation_wavelengths:
@@ -1577,18 +1600,20 @@ class SOLISPlotter:
         intensity_cols = df.iloc[:, 1:].values
         intensity = np.mean(intensity_cols, axis=1) if intensity_cols.shape[1] > 1 else intensity_cols[:, 0]
 
-        fig = Figure(figsize=(8, 5), constrained_layout=True)
+        s = self.style  # shorthand
+
+        fig = self._create_figure('spectrum_single', constrained_layout=True)
         ax = fig.add_subplot(111)
-        ax.plot(wavelength, intensity, color='#27ae60', linewidth=2, label=parsed_file.compound)
-        ax.set_xlabel('Wavelength (nm)', fontsize=12)
-        ax.set_ylabel('Emission Intensity (a.u.)', fontsize=12)
-        ax.tick_params(axis='both', labelsize=10)
-        ax.grid(True, alpha=0.3, linestyle='--')
-        ax.legend(loc='best', fontsize=10)
+        ax.plot(wavelength, intensity, color='#27ae60', linewidth=s.linewidth_fit, label=parsed_file.compound)
+        ax.set_xlabel('Wavelength (nm)', fontsize=s.font_size_axis_label)
+        ax.set_ylabel('Emission Intensity (a.u.)', fontsize=s.font_size_axis_label)
+        ax.tick_params(axis='both', labelsize=s.font_size_tick_label)
+        s.configure_grid(ax)
+        ax.legend(loc='best', fontsize=s.font_size_legend)
 
         if title is None:
             title = f'Fluorescence Spectrum: {parsed_file.compound}'
-        fig.suptitle(title, fontsize=14, fontweight='bold')
+        fig.suptitle(title, fontsize=s.font_size_title, fontweight=s.font_weight_title)
 
         fig.solis_export_data = {
             'Wavelength_nm': wavelength,
@@ -1607,18 +1632,20 @@ class SOLISPlotter:
         intensity_cols = df.iloc[:, 1:].values
         intensity = np.mean(intensity_cols, axis=1) if intensity_cols.shape[1] > 1 else intensity_cols[:, 0]
 
-        fig = Figure(figsize=(8, 5), constrained_layout=True)
+        s = self.style  # shorthand
+
+        fig = self._create_figure('spectrum_single', constrained_layout=True)
         ax = fig.add_subplot(111)
-        ax.plot(wavelength, intensity, color='#8e44ad', linewidth=2, label=parsed_file.compound)
-        ax.set_xlabel('Wavelength (nm)', fontsize=12)
-        ax.set_ylabel('Emission Intensity (a.u.)', fontsize=12)
-        ax.tick_params(axis='both', labelsize=10)
-        ax.grid(True, alpha=0.3, linestyle='--')
-        ax.legend(loc='best', fontsize=10)
+        ax.plot(wavelength, intensity, color='#8e44ad', linewidth=s.linewidth_fit, label=parsed_file.compound)
+        ax.set_xlabel('Wavelength (nm)', fontsize=s.font_size_axis_label)
+        ax.set_ylabel('Emission Intensity (a.u.)', fontsize=s.font_size_axis_label)
+        ax.tick_params(axis='both', labelsize=s.font_size_tick_label)
+        s.configure_grid(ax)
+        ax.legend(loc='best', fontsize=s.font_size_legend)
 
         if title is None:
             title = f'Phosphorescence Spectrum: {parsed_file.compound}'
-        fig.suptitle(title, fontsize=14, fontweight='bold')
+        fig.suptitle(title, fontsize=s.font_size_title, fontweight=s.font_weight_title)
 
         fig.solis_export_data = {
             'Wavelength_nm': wavelength,
@@ -1632,7 +1659,9 @@ class SOLISPlotter:
         """Plot multiple fluorescence spectra overlaid."""
         logger.info(f"Creating merged FL spectra plot with {len(parsed_files)} spectra")
 
-        fig = Figure(figsize=(10, 6), constrained_layout=True)
+        s = self.style  # shorthand
+
+        fig = self._create_figure('spectrum_merged', constrained_layout=True)
         ax = fig.add_subplot(111)
         export_data = {}
 
@@ -1642,19 +1671,19 @@ class SOLISPlotter:
             intensity_cols = df.iloc[:, 1:].values
             intensity = np.mean(intensity_cols, axis=1) if intensity_cols.shape[1] > 1 else intensity_cols[:, 0]
             color = MERGED_COLORS[idx % len(MERGED_COLORS)]
-            ax.plot(wavelength, intensity, color=color, linewidth=2, label=parsed_file.compound)
+            ax.plot(wavelength, intensity, color=color, linewidth=s.linewidth_fit, label=parsed_file.compound)
             export_data[f'Wavelength_nm_{parsed_file.compound}'] = wavelength
             export_data[f'FL_Intensity_{parsed_file.compound}'] = intensity
 
-        ax.set_xlabel('Wavelength (nm)', fontsize=12)
-        ax.set_ylabel('Emission Intensity (a.u.)', fontsize=12)
-        ax.tick_params(axis='both', labelsize=10)
-        ax.grid(True, alpha=0.3, linestyle='--')
-        ax.legend(loc='best', fontsize=10)
+        ax.set_xlabel('Wavelength (nm)', fontsize=s.font_size_axis_label)
+        ax.set_ylabel('Emission Intensity (a.u.)', fontsize=s.font_size_axis_label)
+        ax.tick_params(axis='both', labelsize=s.font_size_tick_label)
+        s.configure_grid(ax)
+        ax.legend(loc='best', fontsize=s.font_size_legend)
 
         if title is None:
             title = f'Fluorescence Spectra ({len(parsed_files)} compounds)'
-        fig.suptitle(title, fontsize=14, fontweight='bold')
+        fig.suptitle(title, fontsize=s.font_size_title, fontweight=s.font_weight_title)
         fig.solis_export_data = export_data
         logger.info("Merged FL spectra plot created successfully")
         return fig
@@ -1663,7 +1692,9 @@ class SOLISPlotter:
         """Plot multiple phosphorescence spectra overlaid."""
         logger.info(f"Creating merged Ph spectra plot with {len(parsed_files)} spectra")
 
-        fig = Figure(figsize=(10, 6), constrained_layout=True)
+        s = self.style  # shorthand
+
+        fig = self._create_figure('spectrum_merged', constrained_layout=True)
         ax = fig.add_subplot(111)
         export_data = {}
 
@@ -1673,19 +1704,19 @@ class SOLISPlotter:
             intensity_cols = df.iloc[:, 1:].values
             intensity = np.mean(intensity_cols, axis=1) if intensity_cols.shape[1] > 1 else intensity_cols[:, 0]
             color = MERGED_COLORS[idx % len(MERGED_COLORS)]
-            ax.plot(wavelength, intensity, color=color, linewidth=2, label=parsed_file.compound)
+            ax.plot(wavelength, intensity, color=color, linewidth=s.linewidth_fit, label=parsed_file.compound)
             export_data[f'Wavelength_nm_{parsed_file.compound}'] = wavelength
             export_data[f'Ph_Intensity_{parsed_file.compound}'] = intensity
 
-        ax.set_xlabel('Wavelength (nm)', fontsize=12)
-        ax.set_ylabel('Emission Intensity (a.u.)', fontsize=12)
-        ax.tick_params(axis='both', labelsize=10)
-        ax.grid(True, alpha=0.3, linestyle='--')
-        ax.legend(loc='best', fontsize=10)
+        ax.set_xlabel('Wavelength (nm)', fontsize=s.font_size_axis_label)
+        ax.set_ylabel('Emission Intensity (a.u.)', fontsize=s.font_size_axis_label)
+        ax.tick_params(axis='both', labelsize=s.font_size_tick_label)
+        s.configure_grid(ax)
+        ax.legend(loc='best', fontsize=s.font_size_legend)
 
         if title is None:
             title = f'Phosphorescence Spectra ({len(parsed_files)} compounds)'
-        fig.suptitle(title, fontsize=14, fontweight='bold')
+        fig.suptitle(title, fontsize=s.font_size_title, fontweight=s.font_weight_title)
         fig.solis_export_data = export_data
         logger.info("Merged Ph spectra plot created successfully")
         return fig
@@ -1709,7 +1740,9 @@ class SOLISPlotter:
 
         logger.info(f"Creating spectral overlay for {compound_name}")
 
-        fig = Figure(figsize=(9, 5), constrained_layout=True)
+        s = self.style  # shorthand
+
+        fig = self._create_figure('spectrum_overlay', constrained_layout=True)
         ax = fig.add_subplot(111)
         export_data = {}
 
@@ -1724,28 +1757,28 @@ class SOLISPlotter:
 
         if abs_file is not None:
             x, y = _extract_and_normalize(abs_file)
-            ax.plot(x, y, 'k-', linewidth=2, label='Absorbance')
+            ax.plot(x, y, 'k-', linewidth=s.linewidth_fit, label='Absorbance')
             export_data['Wavelength_nm_Abs'] = x
             export_data['Absorbance_norm'] = y
 
         if fl_file is not None:
             x, y = _extract_and_normalize(fl_file)
-            ax.plot(x, y, color='#27ae60', linewidth=2, linestyle='-', label='FL Emission')
+            ax.plot(x, y, color='#27ae60', linewidth=s.linewidth_fit, linestyle='-', label='FL Emission')
             export_data['Wavelength_nm_FL'] = x
             export_data['FL_norm'] = y
 
         if ph_file is not None:
             x, y = _extract_and_normalize(ph_file)
-            ax.plot(x, y, color='#8e44ad', linewidth=2, linestyle='--', label='Ph Emission')
+            ax.plot(x, y, color='#8e44ad', linewidth=s.linewidth_fit, linestyle='--', label='Ph Emission')
             export_data['Wavelength_nm_Ph'] = x
             export_data['Ph_norm'] = y
 
-        ax.set_xlabel('Wavelength (nm)', fontsize=12)
-        ax.set_ylabel('Normalized Intensity', fontsize=12)
+        ax.set_xlabel('Wavelength (nm)', fontsize=s.font_size_axis_label)
+        ax.set_ylabel('Normalized Intensity', fontsize=s.font_size_axis_label)
         ax.set_ylim(-0.05, 1.1)
-        ax.tick_params(axis='both', labelsize=10)
-        ax.grid(True, alpha=0.3, linestyle='--')
-        ax.legend(loc='best', fontsize=10)
+        ax.tick_params(axis='both', labelsize=s.font_size_tick_label)
+        s.configure_grid(ax)
+        ax.legend(loc='best', fontsize=s.font_size_legend)
 
         if title is None:
             parts = []
@@ -1756,7 +1789,7 @@ class SOLISPlotter:
             if ph_file is not None:
                 parts.append('Ph')
             title = f'{" + ".join(parts)} Overlay: {compound_name}'
-        fig.suptitle(title, fontsize=14, fontweight='bold')
+        fig.suptitle(title, fontsize=s.font_size_title, fontweight=s.font_weight_title)
 
         fig.solis_export_data = export_data
         logger.info("Spectral overlay plot created successfully")

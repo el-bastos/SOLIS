@@ -21,6 +21,7 @@ from scipy import stats
 from matplotlib.figure import Figure
 from matplotlib.gridspec import GridSpec
 
+from plotting.plot_style import PlotStyle
 from utils.logger_config import get_logger
 logger = get_logger(__name__)
 
@@ -161,7 +162,8 @@ def perform_linear_regression_through_origin(
 
 def plot_alpha_vs_absorption_mpl(
     selected_items: List[Dict[str, Any]],
-    ei_unit: str = "a.u."
+    ei_unit: str = "a.u.",
+    style: Optional[PlotStyle] = None
 ) -> Tuple[Figure, Dict[str, Any]]:
     """
     Create α vs (1 - 10^(-A(λ))) correlation plot with linear regression using matplotlib.
@@ -257,8 +259,15 @@ def plot_alpha_vs_absorption_mpl(
     if not regression_stats['success']:
         raise ValueError("Linear regression failed")
 
+    s = style or PlotStyle()
+
     # Create matplotlib figure
-    fig = Figure(figsize=(8, 6), dpi=100)
+    import matplotlib
+    matplotlib.rc('font', family=s.font_family)
+    figsize = s.get_figsize('linearity')
+    fig = Figure(figsize=figsize, dpi=100)
+    fig.solis_plot_category = 'linearity'
+    fig.solis_plot_style = s
     ax = fig.add_subplot(111)
 
     # Plot all data points (no linear/saturation distinction)
@@ -283,14 +292,14 @@ def plot_alpha_vs_absorption_mpl(
     else:
         line_label = f'y = {slope:.2e}x + {intercept:.1f}'
 
-    ax.plot(x_line, y_line, '--', color='black', linewidth=2, label=line_label, zorder=2)
+    ax.plot(x_line, y_line, '--', color='black', linewidth=s.linewidth_fit, label=line_label, zorder=2)
 
     # Labels and formatting
-    ax.set_xlabel('1 - 10$^{-A(λ)}$ (Absorbed Fraction)', fontsize=12)
-    ax.set_ylabel('α (Amplitude, counts)', fontsize=12)
-    ax.set_title('Beer-Lambert Linearity Check', fontsize=14, pad=15)
-    ax.grid(True, alpha=0.3)
-    ax.legend(loc='upper left', fontsize=10, framealpha=0.9)
+    ax.set_xlabel('1 - 10$^{-A(λ)}$ (Absorbed Fraction)', fontsize=s.font_size_axis_label)
+    ax.set_ylabel('α (Amplitude, counts)', fontsize=s.font_size_axis_label)
+    ax.set_title('Beer-Lambert Linearity Check', fontsize=s.font_size_title, pad=15)
+    s.configure_grid(ax)
+    ax.legend(loc='upper left', fontsize=s.font_size_legend, framealpha=0.9)
 
     # No statistics text box (removed per user request)
 
@@ -320,7 +329,8 @@ def plot_alpha_vs_absorption_mpl(
 
 def plot_alpha_vs_intensity_mpl(
     selected_items: List[Dict[str, Any]],
-    ei_unit: str = "a.u."
+    ei_unit: str = "a.u.",
+    style: Optional[PlotStyle] = None
 ) -> Tuple[Figure, Dict[str, Any]]:
     """
     Create α vs Excitation Intensity correlation plot with linear regression using matplotlib.
@@ -417,8 +427,15 @@ def plot_alpha_vs_intensity_mpl(
     if not regression_stats['success']:
         raise ValueError("Linear regression failed")
 
+    s = style or PlotStyle()
+
     # Create matplotlib figure
-    fig = Figure(figsize=(8, 6), dpi=100)
+    import matplotlib
+    matplotlib.rc('font', family=s.font_family)
+    figsize = s.get_figsize('linearity')
+    fig = Figure(figsize=figsize, dpi=100)
+    fig.solis_plot_category = 'linearity'
+    fig.solis_plot_style = s
     ax = fig.add_subplot(111)
 
     # Plot all data points (no linear/saturation distinction)
@@ -443,14 +460,14 @@ def plot_alpha_vs_intensity_mpl(
     else:
         line_label = f'y = {slope:.2e}x + {intercept:.1f}'
 
-    ax.plot(x_line, y_line, '--', color='black', linewidth=2, label=line_label, zorder=2)
+    ax.plot(x_line, y_line, '--', color='black', linewidth=s.linewidth_fit, label=line_label, zorder=2)
 
     # Labels and formatting
-    ax.set_xlabel(f'Excitation Intensity ({ei_unit})', fontsize=12)
-    ax.set_ylabel('α (Amplitude, counts)', fontsize=12)
-    ax.set_title('Intensity Dependence Check', fontsize=14, pad=15)
-    ax.grid(True, alpha=0.3)
-    ax.legend(loc='upper left', fontsize=10, framealpha=0.9)
+    ax.set_xlabel(f'Excitation Intensity ({ei_unit})', fontsize=s.font_size_axis_label)
+    ax.set_ylabel('α (Amplitude, counts)', fontsize=s.font_size_axis_label)
+    ax.set_title('Intensity Dependence Check', fontsize=s.font_size_title, pad=15)
+    s.configure_grid(ax)
+    ax.legend(loc='upper left', fontsize=s.font_size_legend, framealpha=0.9)
 
     # No statistics text box (removed per user request)
 

@@ -1,19 +1,21 @@
 #!/usr/bin/env python3
 """
 Preferences Dialog - User settings for SOLIS analysis
+
+Contains SNR thresholds and surplus analysis parameters.
+Plot appearance settings are in PlotAppearanceDialog (right-click on any plot).
 """
 
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QFormLayout, QDoubleSpinBox,
-    QPushButton, QHBoxLayout, QGroupBox, QLabel, QSpinBox,
-    QLineEdit, QScrollArea, QWidget
+    QPushButton, QHBoxLayout, QGroupBox, QLabel, QWidget
 )
 from PyQt6.QtCore import Qt
 from gui.stylesheets import INFO_LABEL_STYLE
 
 
 class PreferencesDialog(QDialog):
-    """Dialog for editing user preferences."""
+    """Dialog for editing user preferences (SNR thresholds, surplus settings)."""
 
     def __init__(self, parent=None, current_settings=None):
         super().__init__(parent)
@@ -32,7 +34,7 @@ class PreferencesDialog(QDialog):
                 },
                 'heterogeneous_vesicle': {
                     # Geometry parameters
-                    'total_time_us': 100.0,  # Extended to cover typical experimental range (~82 us)
+                    'total_time_us': 100.0,
                     'bin_ns': 20.0,
                     'dx_nm': 1.0,
                     'dt_ns': 0.125,
@@ -51,8 +53,8 @@ class PreferencesDialog(QDialog):
                     'tau_w_min': 3.5,
                     'tau_w_max': 4.5,
                     'grid_points': 15,
-                    'fit_start': 0.3,  # Start after spike region
-                    'fit_end': 100.0   # Match total_time_us
+                    'fit_start': 0.3,
+                    'fit_end': 100.0
                 }
             }
 
@@ -61,25 +63,12 @@ class PreferencesDialog(QDialog):
 
     def _setup_ui(self):
         """Setup dialog UI."""
-        # Create scroll area for all preferences
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-
-        # Container widget for scroll area
-        container = QWidget()
-        layout = QVBoxLayout(container)
-
-        # Main dialog layout
         main_layout = QVBoxLayout(self)
-        main_layout.addWidget(scroll)
 
-        # SNR Thresholds Group
+        # --- SNR Thresholds Group ---
         threshold_group = QGroupBox("SNR Thresholds (Linear Ratio)")
         threshold_layout = QFormLayout()
 
-        # Info label
         info_label = QLabel(
             "Set minimum SNR thresholds for analysis modes.\n"
             "Replicates below threshold will be excluded."
@@ -88,7 +77,6 @@ class PreferencesDialog(QDialog):
         info_label.setStyleSheet(INFO_LABEL_STYLE)
         threshold_layout.addRow(info_label)
 
-        # Homogeneous threshold
         self.homogeneous_spin = QDoubleSpinBox()
         self.homogeneous_spin.setRange(1.0, 1000.0)
         self.homogeneous_spin.setValue(self.settings['snr_thresholds']['homogeneous'])
@@ -97,7 +85,6 @@ class PreferencesDialog(QDialog):
         self.homogeneous_spin.setToolTip("Minimum SNR for homogeneous analysis (default: 5:1)")
         threshold_layout.addRow("Homogeneous:", self.homogeneous_spin)
 
-        # Heterogeneous threshold
         self.heterogeneous_spin = QDoubleSpinBox()
         self.heterogeneous_spin.setRange(1.0, 1000.0)
         self.heterogeneous_spin.setValue(self.settings['snr_thresholds']['heterogeneous'])
@@ -107,42 +94,40 @@ class PreferencesDialog(QDialog):
         threshold_layout.addRow("Heterogeneous:", self.heterogeneous_spin)
 
         threshold_group.setLayout(threshold_layout)
-        layout.addWidget(threshold_group)
+        main_layout.addWidget(threshold_group)
 
-        # Surplus Analysis Group
+        # --- Surplus Analysis Group ---
         surplus_group = QGroupBox("Surplus Analysis Parameters")
         surplus_layout = QFormLayout()
 
-        # Mask time
         self.mask_time_spin = QDoubleSpinBox()
         self.mask_time_spin.setRange(0.1, 100.0)
         self.mask_time_spin.setValue(self.settings['surplus']['mask_time_us'])
         self.mask_time_spin.setDecimals(1)
-        self.mask_time_spin.setSuffix(" μs")
-        self.mask_time_spin.setToolTip("Time point for late-time fitting in surplus analysis (default: 6.0 μs)")
+        self.mask_time_spin.setSuffix(" \u03bcs")
+        self.mask_time_spin.setToolTip("Time point for late-time fitting in surplus analysis (default: 6.0 \u03bcs)")
         surplus_layout.addRow("Mask Time:", self.mask_time_spin)
 
         surplus_group.setLayout(surplus_layout)
-        layout.addWidget(surplus_group)
+        main_layout.addWidget(surplus_group)
 
-        # Heterogeneous Vesicle Analysis - REMOVED
-        # All parameters now in HeterogeneousDialog (3-tab popup before analysis)
-        # No longer in Preferences - use Analyze → Heterogeneous Analysis menu
+        # Note about plot appearance
+        note = QLabel("Plot appearance: right-click any plot \u2192 Plot Appearance...")
+        note.setStyleSheet(INFO_LABEL_STYLE)
+        note.setWordWrap(True)
+        main_layout.addWidget(note)
 
-        # Set container as scroll area widget
-        scroll.setWidget(container)
+        main_layout.addStretch()
 
         # Buttons
         button_layout = QHBoxLayout()
 
-        # Reset to defaults button
         reset_button = QPushButton("Reset to Defaults")
         reset_button.clicked.connect(self._reset_defaults)
         button_layout.addWidget(reset_button)
 
         button_layout.addStretch()
 
-        # OK/Cancel buttons
         ok_button = QPushButton("OK")
         ok_button.clicked.connect(self.accept)
         ok_button.setDefault(True)
@@ -154,20 +139,14 @@ class PreferencesDialog(QDialog):
 
         main_layout.addLayout(button_layout)
 
-        # Set dialog size
-        self.setMinimumWidth(500)
-        self.setMinimumHeight(600)
+        self.setMinimumWidth(380)
+        self.setMinimumHeight(320)
 
     def _reset_defaults(self):
         """Reset all settings to default values."""
-        # SNR thresholds
         self.homogeneous_spin.setValue(5.0)
         self.heterogeneous_spin.setValue(50.0)
-
-        # Surplus
         self.mask_time_spin.setValue(6.0)
-
-        # Heterogeneous vesicle parameters removed - now in HeterogeneousDialog
 
     def get_settings(self):
         """
@@ -176,7 +155,7 @@ class PreferencesDialog(QDialog):
         Returns
         -------
         dict
-            Dictionary with 'snr_thresholds' and 'surplus' keys
+            Dictionary with 'snr_thresholds', 'surplus', and 'plot_style' keys
         """
         return {
             'snr_thresholds': {
@@ -185,8 +164,8 @@ class PreferencesDialog(QDialog):
             },
             'surplus': {
                 'mask_time_us': self.mask_time_spin.value()
-            }
-            # heterogeneous_vesicle removed - now in HeterogeneousDialog
+            },
+            'plot_style': self.settings.get('plot_style', {})
         }
 
     def get_thresholds(self):

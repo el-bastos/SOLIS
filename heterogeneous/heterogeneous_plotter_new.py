@@ -15,6 +15,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from typing import Optional, Tuple
 from heterogeneous.heterogeneous_dataclasses import HeterogeneousFitResult
+from plotting.plot_style import PlotStyle
 from utils.logger_config import get_logger
 
 logger = get_logger(__name__)
@@ -30,14 +31,16 @@ class HeterogeneousPlotter:
         plotter.plot_fit_curves()
     """
 
-    def __init__(self, result: HeterogeneousFitResult):
+    def __init__(self, result: HeterogeneousFitResult, style: Optional[PlotStyle] = None):
         """
         Initialize plotter with fit result.
 
         Args:
             result: HeterogeneousFitResult from fit_heterogeneous()
+            style: PlotStyle configuration (default: PlotStyle() with legacy defaults)
         """
         self.result = result
+        self.style = style or PlotStyle()
         logger.info("HeterogeneousPlotter initialized")
 
     def plot_figure_4(self,
@@ -68,12 +71,18 @@ class HeterogeneousPlotter:
 
         logger.info(f"Generating Figure 4: Chi-square landscape (style={style})")
 
+        s = self.style  # shorthand
+
         # Extract grid data
         chi2_surface = self.result.grid_search_surface  # Shape: (n_tau_T, n_tau_delta_W)
         tau_T_grid = self.result.grid_tau_T  # 1D array of tau_T values
         tau_delta_W_grid = self.result.grid_tau_delta_W  # 1D array of tau_delta_W values
 
+        import matplotlib
+        matplotlib.rc('font', family=s.font_family)
         fig, ax = plt.subplots(figsize=figsize)
+        fig.solis_plot_category = 'het_grid'
+        fig.solis_plot_style = self.style
 
         # Create meshgrid for contour plotting
         tau_T_mesh, tau_delta_W_mesh = np.meshgrid(tau_T_grid, tau_delta_W_grid, indexing='ij')
@@ -124,7 +133,7 @@ class HeterogeneousPlotter:
                 linewidths=1.0,
                 alpha=0.6
             )
-            ax.clabel(contour, inline=True, fontsize=8, fmt='%.1f')
+            ax.clabel(contour, inline=True, fontsize=s.font_size_annotation - 1, fmt='%.1f')
 
         else:  # grayscale
             levels = np.arange(0.9, 3.5, 0.1)
@@ -147,7 +156,7 @@ class HeterogeneousPlotter:
                 colors='black',
                 linewidths=1.2
             )
-            ax.clabel(contour, inline=True, fontsize=9, fmt='%.2f')
+            ax.clabel(contour, inline=True, fontsize=s.font_size_annotation, fmt='%.2f')
 
         # Add rate ratio contours (black lines matching paper Figure 4)
         if show_rate_ratio and hasattr(self.result, 'calculate_rate_ratio_surface'):
@@ -163,7 +172,7 @@ class HeterogeneousPlotter:
 
             # Add text label
             ax.text(0.98, 0.02, 'Black lines: rate ratio A/B',
-                   transform=ax.transAxes, fontsize=8, ha='right', va='bottom',
+                   transform=ax.transAxes, fontsize=s.font_size_annotation - 1, ha='right', va='bottom',
                    bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.8))
 
         # Mark minimum chi-square with X
@@ -178,17 +187,17 @@ class HeterogeneousPlotter:
         # Add annotation
         ax.annotate(f'τ_T = {tau_T_min:.2f} μs\nτ_Δ,W = {tau_delta_min:.2f} μs\nχ²ᵣ = {min_chi2:.3f}',
                    xy=(tau_T_min, tau_delta_min), xytext=(15, 15),
-                   textcoords='offset points', fontsize=9,
+                   textcoords='offset points', fontsize=s.font_size_annotation,
                    bbox=dict(boxstyle='round,pad=0.5', facecolor='yellow', alpha=0.8, edgecolor='black'),
                    arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0.3', lw=1.5))
 
         # Labels matching paper style
-        ax.set_xlabel('PS triplet decay time τ_T (μs)', fontsize=12, fontweight='bold')
-        ax.set_ylabel('¹O₂ decay time τ_Δ,water (μs)', fontsize=12, fontweight='bold')
-        ax.tick_params(labelsize=10)
+        ax.set_xlabel('PS triplet decay time τ_T (μs)', fontsize=s.font_size_axis_label, fontweight=s.font_weight_title)
+        ax.set_ylabel('¹O₂ decay time τ_Δ,water (μs)', fontsize=s.font_size_axis_label, fontweight=s.font_weight_title)
+        ax.tick_params(labelsize=s.font_size_tick_label)
 
         # Grid for easier reading
-        ax.grid(True, alpha=0.2, linestyle=':', linewidth=0.5)
+        s.configure_grid(ax)
 
         # Set reasonable axis limits with small padding
         ax.set_xlim(tau_T_grid[0], tau_T_grid[-1])
@@ -196,11 +205,11 @@ class HeterogeneousPlotter:
 
         # Title
         ax.set_title('Reduced χ² Landscape for Heterogeneous Diffusion Model',
-                    fontsize=13, fontweight='bold', pad=15)
+                    fontsize=s.font_size_title, fontweight=s.font_weight_title, pad=15)
 
         # Add colorbar
         cbar = plt.colorbar(contourf, ax=ax, label='Reduced χ²')
-        cbar.ax.tick_params(labelsize=9)
+        cbar.ax.tick_params(labelsize=s.font_size_annotation)
 
         plt.tight_layout()
 
@@ -252,22 +261,28 @@ class HeterogeneousPlotter:
         """
         logger.info("Generating fit curves plot (Figure 4c style)")
 
+        s = self.style  # shorthand
+        import matplotlib
+        matplotlib.rc('font', family=s.font_family)
+
         # Create figure with 2 subplots (fit + residuals)
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=figsize,
                                        gridspec_kw={'height_ratios': [3, 1]},
                                        sharex=True)
+        fig.solis_plot_category = 'het_fit'
+        fig.solis_plot_style = self.style
 
         # Top panel: Data and fit
         # Experimental data (gray dots matching paper)
         ax1.plot(self.result.time_experimental,
                 self.result.intensity_experimental / 1e3,  # Convert to 10³ counts
-                'o', color='lightgray', markersize=3, alpha=0.6,
+                'o', color='lightgray', markersize=s.markersize_data, alpha=0.6,
                 label='Data', zorder=1)
 
         # Best fit (green solid line matching paper)
         ax1.plot(self.result.time_experimental,
                 self.result.fit_curve / 1e3,
-                '-', color='green', linewidth=2,
+                '-', color='green', linewidth=s.linewidth_fit,
                 label='Fit', zorder=3)
 
         # Component breakdown
@@ -276,24 +291,24 @@ class HeterogeneousPlotter:
             lipid_component = self.result.amplitude_lipid * self.result.n_lipid_curve
             ax1.plot(self.result.time_experimental,
                     lipid_component / 1e3,
-                    ':', color='blue', linewidth=2,
+                    ':', color='blue', linewidth=s.linewidth_fit,
                     label=f'A × n_L, Lipid', zorder=2)
 
             # Water component (orange dotted) - WITHOUT background
             water_component = self.result.amplitude_water * self.result.n_water_curve
             ax1.plot(self.result.time_experimental,
                     water_component / 1e3,
-                    ':', color='orange', linewidth=2,
+                    ':', color='orange', linewidth=s.linewidth_fit,
                     label=f'B × n_W, Water', zorder=2)
 
         # Formatting matching paper
         if log_scale:
             ax1.set_xscale('log')
 
-        ax1.set_ylabel('Counts (10³)', fontsize=12)
+        ax1.set_ylabel('Counts (10³)', fontsize=s.font_size_axis_label)
         ax1.set_ylim(bottom=-0.1)  # Start slightly below zero like paper
-        ax1.tick_params(labelsize=10)
-        ax1.legend(fontsize=9, loc='upper right', frameon=True)
+        ax1.tick_params(labelsize=s.font_size_tick_label)
+        ax1.legend(fontsize=s.font_size_annotation, loc='upper right', frameon=True)
         ax1.grid(False)
 
         # Bottom panel: Weighted Residuals (WRes)
@@ -307,18 +322,18 @@ class HeterogeneousPlotter:
 
         ax2.plot(self.result.time_experimental[fit_mask],
                 wres,
-                '-', color='green', linewidth=1, alpha=0.8)
-        ax2.axhline(0, color='gray', linestyle='--', linewidth=1, alpha=0.5)
+                '-', color='green', linewidth=s.linewidth_residuals, alpha=0.8)
+        ax2.axhline(0, color='gray', linestyle='--', linewidth=s.linewidth_residuals, alpha=0.5)
 
         # Add vertical lines to mark fit range boundaries
-        ax1.axvline(fit_start, color='red', linestyle=':', linewidth=1.5, alpha=0.7, label='Fit range')
-        ax1.axvline(fit_end, color='red', linestyle=':', linewidth=1.5, alpha=0.7)
+        ax1.axvline(fit_start, color='red', linestyle=':', linewidth=s.linewidth_data, alpha=0.7, label='Fit range')
+        ax1.axvline(fit_end, color='red', linestyle=':', linewidth=s.linewidth_data, alpha=0.7)
 
         if log_scale:
             ax2.set_xscale('log')
 
-        ax2.set_xlabel('Time (μs)', fontsize=12)
-        ax2.set_ylabel('WRes', fontsize=10)
+        ax2.set_xlabel('Time (μs)', fontsize=s.font_size_axis_label)
+        ax2.set_ylabel('WRes', fontsize=s.font_size_tick_label)
 
         # Auto-scale residuals symmetrically (same method as homogeneous plots)
         max_abs_residual = np.nanmax(np.abs(wres))
@@ -328,7 +343,7 @@ class HeterogeneousPlotter:
             residual_limit = np.ceil(max_abs_residual)
         ax2.set_ylim(-residual_limit, residual_limit)
 
-        ax2.tick_params(labelsize=10)
+        ax2.tick_params(labelsize=s.font_size_tick_label)
         ax2.grid(False)
 
         plt.tight_layout()
@@ -384,17 +399,23 @@ class HeterogeneousPlotter:
         """
         logger.info("Generating component breakdown plot")
 
+        s = self.style  # shorthand
+        import matplotlib
+        matplotlib.rc('font', family=s.font_family)
+
         fig, ax = plt.subplots(figsize=figsize)
+        fig.solis_plot_category = 'het_components'
+        fig.solis_plot_style = self.style
 
         # Plot normalized components
         ax.plot(self.result.time_experimental,
                self.result.n_lipid_curve / np.max(self.result.n_lipid_curve),
-               '-', color='blue', linewidth=2,
+               '-', color='blue', linewidth=s.linewidth_fit,
                label='Lipid (normalized)')
 
         ax.plot(self.result.time_experimental,
                self.result.n_water_curve / np.max(self.result.n_water_curve),
-               '-', color='green', linewidth=2,
+               '-', color='green', linewidth=s.linewidth_fit,
                label='Water (normalized)')
 
         # Mark peak times
@@ -410,11 +431,11 @@ class HeterogeneousPlotter:
                label=f'Water peak: {self.result.time_experimental[peak_water_idx]:.2f} μs')
 
         ax.set_xscale('log')
-        ax.set_xlabel('Time (μs)', fontsize=12, fontweight='bold')
-        ax.set_ylabel('Normalized intensity', fontsize=12, fontweight='bold')
-        ax.set_title('Lipid vs Water Components', fontsize=14, fontweight='bold')
-        ax.legend(fontsize=11, loc='best')
-        ax.grid(True, alpha=0.3, linestyle='--')
+        ax.set_xlabel('Time (μs)', fontsize=s.font_size_axis_label, fontweight=s.font_weight_title)
+        ax.set_ylabel('Normalized intensity', fontsize=s.font_size_axis_label, fontweight=s.font_weight_title)
+        ax.set_title('Lipid vs Water Components', fontsize=s.font_size_title, fontweight=s.font_weight_title)
+        ax.legend(fontsize=s.font_size_legend, loc='best')
+        s.configure_grid(ax)
 
         plt.tight_layout()
 

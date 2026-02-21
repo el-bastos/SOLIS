@@ -13,7 +13,7 @@ Contains tabs for:
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, QTreeWidget, QTreeWidgetItem,
     QLabel, QPushButton, QHeaderView, QAbstractItemView, QTableWidget, QTableWidgetItem,
-    QStyle
+    QStyle, QMenu
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QSize
 from PyQt6.QtGui import QFont, QIcon
@@ -325,8 +325,18 @@ class ResultsViewerWidget(QWidget):
                 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
                 from matplotlib.backends.backend_qtagg import NavigationToolbar2QT
 
+                # Horizontal y-axis labels
+                from gui.plot_viewer_widget import _fix_ylabel_horizontal
+                _fix_ylabel_horizontal(fig)
+
                 # Create canvas
                 canvas = FigureCanvasQTAgg(fig)
+
+                # Right-click context menu
+                canvas.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+                canvas.customContextMenuRequested.connect(
+                    lambda pos, f=fig, c=canvas: self._show_plot_context_menu(pos, f, c)
+                )
 
                 # Create matplotlib toolbar
                 mpl_toolbar = NavigationToolbar2QT(canvas, widget)
@@ -375,15 +385,30 @@ class ResultsViewerWidget(QWidget):
 
                 control_layout.addStretch()
 
+                # Width bar for WYSIWYG export sizing
+                from gui.plot_width_bar import PlotWidthBar, _CanvasResizeFilter
+                width_bar = PlotWidthBar()
+                width_bar.width_changed.connect(
+                    lambda px, c=canvas: c.setMaximumWidth(px if px > 0 else 16777215)
+                )
+                width_bar.dpi_changed.connect(
+                    lambda dpi, f=fig: setattr(f, 'solis_export_dpi', dpi)
+                )
+                # Update size label on canvas resize via event filter
+                resize_filter = _CanvasResizeFilter(width_bar, parent=canvas)
+                canvas.installEventFilter(resize_filter)
+
                 # Add to layout
                 layout.addWidget(control_toolbar)
                 layout.addWidget(mpl_toolbar)
                 layout.addWidget(canvas)
+                layout.addWidget(width_bar)
 
                 # Store references
                 widget._canvas = canvas
                 widget._figure = fig
                 widget._plot_data = plot_data
+                widget._width_bar = width_bar
 
             except Exception as e:
                 logger.error(f"Failed to embed matplotlib figure: {e}")
@@ -1029,7 +1054,8 @@ class ResultsViewerWidget(QWidget):
                 return
 
             # Export to PDF
-            fig.savefig(file_path, format='pdf', bbox_inches='tight')
+            from gui.plot_viewer_widget import _savefig_with_style
+            _savefig_with_style(fig, file_path, 'pdf')
 
             logger.info(f"Plot exported to PDF: {file_path}")
             self.status_message.emit(f"PDF saved: {os.path.basename(file_path)}")
@@ -1059,7 +1085,8 @@ class ResultsViewerWidget(QWidget):
             if not file_path:
                 return
 
-            fig.savefig(file_path, format='svg', bbox_inches='tight')
+            from gui.plot_viewer_widget import _savefig_with_style
+            _savefig_with_style(fig, file_path, 'svg')
 
             logger.info(f"Plot exported to SVG: {file_path}")
             self.status_message.emit(f"SVG saved: {os.path.basename(file_path)}")
@@ -1085,7 +1112,8 @@ class ResultsViewerWidget(QWidget):
             if not file_path:
                 return
 
-            fig.savefig(file_path, format='png', dpi=300, bbox_inches='tight')
+            from gui.plot_viewer_widget import _savefig_with_style
+            _savefig_with_style(fig, file_path, 'png')
 
             logger.info(f"Plot exported to PNG: {file_path}")
             self.status_message.emit(f"PNG saved: {os.path.basename(file_path)}")
@@ -1114,6 +1142,56 @@ class ResultsViewerWidget(QWidget):
 
         except Exception as e:
             logger.error(f"Failed to toggle log X: {e}")
+
+    # ==================== PLOT CONTEXT MENU ====================
+
+    def _show_plot_context_menu(self, pos, fig, canvas):
+        """Show right-click context menu on a plot tab canvas."""
+        menu = QMenu(self)
+        menu.addAction("Plot Appearance...").triggered.connect(
+            lambda: self._open_plot_appearance(fig, canvas)
+        )
+        menu.addSeparator()
+        menu.addAction("Export to Origin (.opju)...").triggered.connect(
+            lambda: self._export_plot_origin(fig)
+        )
+        menu.exec(canvas.mapToGlobal(pos))
+
+    def _open_plot_appearance(self, fig, canvas):
+        """Open the Plot Appearance dialog for an embedded plot."""
+        from gui.plot_appearance_dialog import PlotAppearanceDialog
+        dialog = PlotAppearanceDialog(fig, canvas, parent=self)
+        dialog.exec()
+
+    def _export_plot_origin(self, fig):
+        """Export plot to Origin .opju file."""
+        from PyQt6.QtWidgets import QFileDialog, QMessageBox
+        import os
+
+        try:
+            file_path, _ = QFileDialog.getSaveFileName(
+                self, "Export to Origin Project",
+                "plot.opju", "Origin Project Files (*.opju)"
+            )
+            if not file_path:
+                return
+
+            from gui.origin_exporter import export_figure_to_origin
+            export_figure_to_origin(fig, file_path)
+
+            logger.info(f"Plot exported to Origin: {file_path}")
+            self.status_message.emit(f"Origin project saved: {os.path.basename(file_path)}")
+
+        except ImportError:
+            logger.error("originpro package not available")
+            QMessageBox.critical(self, "Export Error",
+                                 "The 'originpro' package is not installed.\n"
+                                 "Install with: pip install originpro\n"
+                                 "Requires OriginLab 2021+ installed.")
+        except Exception as e:
+            logger.error(f"Failed to export to Origin: {e}")
+            QMessageBox.critical(self, "Export Error",
+                                 f"Failed to export to Origin:\n{e}")
 
     # ==================== CLEAR METHODS ====================
 
