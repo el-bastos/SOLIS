@@ -326,8 +326,8 @@ class ResultsViewerWidget(QWidget):
                 from matplotlib.backends.backend_qtagg import NavigationToolbar2QT
 
                 # Horizontal y-axis labels
-                from gui.plot_viewer_widget import _fix_ylabel_horizontal
-                _fix_ylabel_horizontal(fig)
+                from gui.plot_viewer_widget import _fix_ylabels
+                _fix_ylabels(fig)
 
                 # Create canvas
                 canvas = FigureCanvasQTAgg(fig)
@@ -389,7 +389,9 @@ class ResultsViewerWidget(QWidget):
                 from gui.plot_width_bar import PlotWidthBar, _CanvasResizeFilter
                 width_bar = PlotWidthBar()
                 width_bar.width_changed.connect(
-                    lambda px, c=canvas: c.setMaximumWidth(px if px > 0 else 16777215)
+                    lambda pct, c=canvas, w=widget: c.setMaximumWidth(
+                        int(w.width() * pct / 100) if pct > 0 else 16777215
+                    )
                 )
                 width_bar.dpi_changed.connect(
                     lambda dpi, f=fig: setattr(f, 'solis_export_dpi', dpi)

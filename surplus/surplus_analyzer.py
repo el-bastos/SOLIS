@@ -202,24 +202,32 @@ def analyze_surplus(time: np.ndarray, intensity: np.ndarray,
     time_fit = time[fitting_mask]
     intensity_fit = intensity[fitting_mask]
 
+    # Filter NaN/Inf from fitting data (Step 1)
+    valid_step1 = np.isfinite(time_fit) & np.isfinite(intensity_fit)
+    time_fit_clean = time_fit[valid_step1]
+    intensity_fit_clean = intensity_fit[valid_step1]
+    if len(time_fit_clean) < 5:
+        raise ValueError(f"Too few valid data points in late-time region (t > {mask_time:.1f} μs): {len(time_fit_clean)}")
+    logger.info(f"Step 1 fitting: {len(time_fit_clean)} valid points (filtered {np.sum(~valid_step1)} NaN/Inf)")
+
     # Initial guesses
-    A_guess = np.nanmax(intensity_fit) * 1.5
+    A_guess = np.nanmax(intensity_fit_clean) * 1.5
     tau_delta_guess = 3.5  # Use 3.5 as initial guess (typical for many systems)
-    y0_guess = np.nanmean(intensity_fit[-20:])
+    y0_guess = np.nanmean(intensity_fit_clean[-20:])
 
     # Fit homogeneous model WITHOUT t0 (t0 = 0 fixed) - tau_delta is FREE
     p0 = [A_guess, tau_delta_guess, tau_T_guess, y0_guess]
     bounds = ([0, 0.1, 0.01, -np.inf], [np.inf, 50.0, 10.0, np.inf])
 
-    popt, _ = curve_fit(homogeneous_model_no_t0, time_fit, intensity_fit,
+    popt, _ = curve_fit(homogeneous_model_no_t0, time_fit_clean, intensity_fit_clean,
                        p0=p0, bounds=bounds, maxfev=20000)
     A_late, tau_delta_late, tau_T_late, y0_late = popt
     t0_late = 0.0  # Fixed at zero
 
     # Model produces curve from t=0 to end
     late_fit_curve = homogeneous_model_no_t0(time, A_late, tau_delta_late, tau_T_late, y0_late)
-    late_r2 = calculate_r2(intensity_fit,
-                          homogeneous_model_no_t0(time_fit, A_late, tau_delta_late, tau_T_late, y0_late))
+    late_r2 = calculate_r2(intensity_fit_clean,
+                          homogeneous_model_no_t0(time_fit_clean, A_late, tau_delta_late, tau_T_late, y0_late))
 
     logger.info(f"Late fit: A={A_late:.1f}, τΔ={tau_delta_late:.3f}, τT={tau_T_late:.3f}, t0=0.0 (fixed), R²={late_r2:.4f}")
 

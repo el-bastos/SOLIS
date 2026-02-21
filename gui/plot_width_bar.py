@@ -2,8 +2,8 @@
 """
 Plot Width Bar — Compact control bar for WYSIWYG plot export sizing.
 
-Embedded below each plot canvas. A slider controls canvas width with
-snap points at common publication widths. Far-right = Auto (fill window).
+Embedded below each plot canvas. A slider controls canvas width as a
+percentage of available space. Far-right = Auto (fill window).
 """
 
 from PyQt6.QtWidgets import (
@@ -15,31 +15,25 @@ from utils.logger_config import get_logger
 
 logger = get_logger(__name__)
 
-# Snap points in mm (shown as tick labels)
-_SNAP_POINTS = [80, 100, 120, 140, 160, 180]
-_SNAP_THRESHOLD = 3  # snap when within 3mm
+# Snap points in percentage of available width
+_SNAP_POINTS = [25, 40, 60, 80]
+_SNAP_THRESHOLD = 3  # snap when within 3 percentage points
 
-# Slider range in mm — values above _MAX_MM mean "Auto"
-_MIN_MM = 50
-_MAX_MM = 190
-_AUTO_VALUE = _MAX_MM + 10  # slider max; anything above _MAX_MM = auto
+# Slider range — values above _MAX_PCT mean "Auto"
+_MIN_PCT = 10
+_MAX_PCT = 100
+_AUTO_VALUE = _MAX_PCT + 10  # slider max; anything above _MAX_PCT = auto
 
 
 class PlotWidthBar(QWidget):
     """Compact bar with a width slider, DPI spinner, and live size label."""
 
-    width_changed = pyqtSignal(int)   # max width in pixels, 0 = auto
+    width_changed = pyqtSignal(int)   # percentage (0 = auto, 10-100 = pct)
     dpi_changed = pyqtSignal(int)     # export DPI
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._screen_dpi = self._get_screen_dpi()
         self._setup_ui()
-
-    @staticmethod
-    def _get_screen_dpi() -> float:
-        screen = QApplication.primaryScreen()
-        return screen.logicalDotsPerInch() if screen else 96.0
 
     def _setup_ui(self):
         layout = QHBoxLayout(self)
@@ -49,28 +43,22 @@ class PlotWidthBar(QWidget):
         # Width label
         self._width_label = QLabel("Auto")
         self._width_label.setFixedWidth(52)
-        self._width_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self._width_label.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
         layout.addWidget(self._width_label)
 
         # Slider
         self._slider = QSlider(Qt.Orientation.Horizontal)
-        self._slider.setRange(_MIN_MM, _AUTO_VALUE)
+        self._slider.setRange(_MIN_PCT, _AUTO_VALUE)
         self._slider.setValue(_AUTO_VALUE)
         self._slider.setTickPosition(QSlider.TickPosition.TicksBelow)
-        self._slider.setTickInterval(20)
+        self._slider.setTickInterval(10)
         self._slider.setSingleStep(5)
-        self._slider.setPageStep(20)
+        self._slider.setPageStep(10)
         self._slider.valueChanged.connect(self._on_slider_moved)
         self._slider.setMinimumWidth(180)
         layout.addWidget(self._slider, stretch=1)
-
-        # Tick labels
-        tick_label = QLabel("  ".join(
-            [str(s) for s in _SNAP_POINTS] + ["Auto"]
-        ))
-        tick_label.setStyleSheet("color: #888; font-size: 9px;")
-        # This is decorative — actual snap handled in code
-        # We skip this label and just rely on the width_label + slider ticks
 
         layout.addSpacing(10)
 
@@ -94,7 +82,6 @@ class PlotWidthBar(QWidget):
 
     def _on_slider_moved(self, value: int):
         """Handle slider value change with snap-to-preset logic."""
-        # Snap to nearby preset
         for snap in _SNAP_POINTS:
             if abs(value - snap) <= _SNAP_THRESHOLD:
                 if self._slider.value() != snap:
@@ -104,21 +91,21 @@ class PlotWidthBar(QWidget):
                 value = snap
                 break
 
-        # Auto zone
-        if value > _MAX_MM:
+        if value > _MAX_PCT:
             self._width_label.setText("Auto")
             self.width_changed.emit(0)
         else:
-            self._width_label.setText(f"{value} mm")
-            px = int(value * self._screen_dpi / 25.4)
-            self.width_changed.emit(px)
+            self._width_label.setText(f"{value}%")
+            self.width_changed.emit(value)
 
-    def update_size_label(self, width_px: int, height_px: int):
+    def update_size_label(self, width_px: int, height_px: int,
+                          container_width: int = 0):
         """Update the current-size label (called on canvas resize)."""
-        dpi = self._screen_dpi
-        w_mm = width_px * 25.4 / dpi
-        h_mm = height_px * 25.4 / dpi
-        self._size_label.setText(f"Current: {w_mm:.0f} \u00d7 {h_mm:.0f} mm")
+        if container_width > 0:
+            pct = width_px * 100 / container_width
+            self._size_label.setText(f"Current: {pct:.0f}%")
+        else:
+            self._size_label.setText(f"Current: {width_px}\u00d7{height_px} px")
 
     def get_export_dpi(self) -> int:
         return self._dpi_spin.value()

@@ -53,6 +53,9 @@ class SOLISMainWindow(QMainWindow):
         # Plot viewers (floating windows)
         self.plot_viewers = {}  # {plot_id: PlotViewerWidget}
 
+        # Track which panel was last selected for universal plot buttons
+        self._last_plot_source = 'results'  # 'results' or 'browser'
+
         # Plot operations log for session replay
         self.plot_operations = []  # List of plot operations to replay on session load
 
@@ -402,6 +405,13 @@ class SOLISMainWindow(QMainWindow):
         self.results_viewer.surplus_plot_requested.connect(self._on_surplus_plot_requested)
         self.results_viewer.heterogeneous_plot_requested.connect(self._on_heterogeneous_plot_requested)
 
+        # Track last-selected panel for universal plot buttons
+        self.file_browser.tree.itemSelectionChanged.connect(
+            lambda: setattr(self, '_last_plot_source', 'browser')
+        )
+        # Note: kinetics_tree is created lazily — connect in _connect_kinetics_tracking()
+        self._kinetics_tree_connected = False
+
         # Start with browser hidden (opens after loading data)
         self.data_browser_dock.hide()
 
@@ -475,6 +485,10 @@ class SOLISMainWindow(QMainWindow):
 
             # Enable Select All button (now data is loaded)
             self.select_all_action.setEnabled(True)
+
+            # Enable plot buttons for spectrum plotting (kinetics enables them again after analysis)
+            self.toolbar_individual_plots_action.setEnabled(True)
+            self.toolbar_plot_merged_action.setEnabled(True)
 
             logger.info(f"Folder loading completed with {len(compounds)} compounds")
 
@@ -1622,6 +1636,13 @@ class SOLISMainWindow(QMainWindow):
 
         # Auto-open Kinetics tab to show results
         self.results_viewer.open_result_tab('Kinetics')
+
+        # Connect kinetics_tree selection tracking (tree now exists)
+        if not self._kinetics_tree_connected and hasattr(self.results_viewer, 'kinetics_tree'):
+            self.results_viewer.kinetics_tree.itemSelectionChanged.connect(
+                lambda: setattr(self, '_last_plot_source', 'results')
+            )
+            self._kinetics_tree_connected = True
 
         # Enable toolbar buttons and export action
         self.select_all_action.setEnabled(True)
@@ -3285,14 +3306,144 @@ class SOLISMainWindow(QMainWindow):
             self.status_label.setText("All decay compounds selected")
 
     def _on_toolbar_individual_plots(self):
-        """Handle Individual Plots button click from toolbar."""
-        # Delegate to integrated browser's method
-        self._on_view_plot_from_kinetics()
+        """Handle Individual Plots — dispatches based on last selection source."""
+        if self._last_plot_source == 'results':
+            self._on_view_plot_from_kinetics()
+            return
+
+        sel = self.file_browser.get_selected_spectrum_items()
+        active = {k: v for k, v in sel['types'].items() if v}
+        if not active:
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "No Selection",
+                "Select spectrum compounds in the browser, or kinetics items in the results tab.")
+            return
+
+        for file_type, compounds in active.items():
+            for compound_name in compounds:
+                self._dispatch_spectrum_single(compound_name, file_type)
 
     def _on_toolbar_plot_merged(self):
-        """Handle Plot Merged button click from toolbar."""
-        # Delegate to integrated browser's method
-        self._on_plot_merged_from_kinetics()
+        """Handle Plot Merged — dispatches based on last selection source."""
+        if self._last_plot_source == 'results':
+            self._on_plot_merged_from_kinetics()
+            return
+
+        sel = self.file_browser.get_selected_spectrum_items()
+        active = {k: v for k, v in sel['types'].items() if v}
+        if not active:
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "No Selection",
+                "Select spectrum compounds in the browser, or kinetics items in the results tab.")
+            return
+
+        if sel['mixed']:
+            self._on_mixed_spectra_overlay(sel['types'])
+        elif len(list(active.values())[0]) < 2:
+            file_type = list(active.keys())[0]
+            self._dispatch_spectrum_single(list(active.values())[0][0], file_type)
+        else:
+            file_type = list(active.keys())[0]
+            self._dispatch_spectrum_merged(list(active.values())[0], file_type)
+
+    def _dispatch_spectrum_single(self, compound_name: str, file_type: str):
+        """Route single spectrum plot to the correct handler."""
+        dispatch = {
+            'absorption': self._on_absorption_plot_requested,
+            'fluorescence': self._on_fl_plot_requested,
+            'phosphorescence': self._on_ph_plot_requested,
+        }
+        handler = dispatch.get(file_type)
+        if handler:
+            handler(compound_name)
+
+    def _dispatch_spectrum_merged(self, compound_names: list, file_type: str):
+        """Route merged spectrum plot to the correct handler."""
+        dispatch = {
+            'absorption': self._on_absorption_merged_requested,
+            'fluorescence': self._on_fl_merged_requested,
+            'phosphorescence': self._on_ph_merged_requested,
+        }
+        handler = dispatch.get(file_type)
+        if handler:
+            handler(compound_names)
+
+    def _on_mixed_spectra_overlay(self, types: dict):
+        """Handle mixed Abs+FL+Ph overlay with peak-based normalization."""
+        from plotting.solis_plotter import SOLISPlotter
+        from PyQt6.QtWidgets import QInputDialog
+
+        # Collect spectrum files grouped by type
+        all_files = {}
+        for file_type, compounds in types.items():
+            if not compounds:
+                continue
+            files = []
+            for cn in compounds:
+                f = self._get_spectrum_file(cn, file_type)
+                if f:
+                    files.append((cn, f))
+            if files:
+                all_files[file_type] = files
+
+        if not all_files:
+            QMessageBox.warning(self, "No Data",
+                "Could not find spectrum data for the selected compounds.")
+            return
+
+        # Find default reference wavelength (strongest peak across all spectra)
+        default_wl = self._find_default_reference_wavelength(all_files)
+
+        # Ask user for reference wavelength
+        wl, ok = QInputDialog.getDouble(
+            self, "Normalize Spectra",
+            "Reference wavelength (nm).\n"
+            "Each spectrum is normalized to its nearest peak within \u00b1100 nm.",
+            value=default_wl, min=200, max=1200, decimals=1
+        )
+        if not ok:
+            return
+
+        self.status_label.setText("Creating mixed spectra overlay...")
+        self._set_busy_cursor()
+        try:
+            plotter = SOLISPlotter(style=self.plot_style)
+            fig = plotter.plot_mixed_spectra_overlay_mpl(all_files, reference_wl=wl)
+
+            # Build title and plot_id
+            type_labels = {'absorption': 'Abs', 'fluorescence': 'FL', 'phosphorescence': 'Ph'}
+            parts = [type_labels[t] for t in all_files]
+            compound_names = [cn for files in all_files.values() for cn, _ in files]
+            title = f'{"+".join(parts)} Overlay: {", ".join(compound_names[:3])}'
+            if len(compound_names) > 3:
+                title += f' +{len(compound_names) - 3} more'
+            plot_id = "mixed_overlay_" + "_".join(compound_names[:3])
+
+            fig.solis_replot = lambda af=all_files, w=wl: (
+                SOLISPlotter(style=self.plot_style).plot_mixed_spectra_overlay_mpl(af, reference_wl=w)
+            )
+            self._show_plot(plot_id, title, fig)
+            self._restore_cursor()
+            self.status_label.setText(f"Mixed overlay opened: {'+'.join(parts)}")
+        except Exception as e:
+            self._restore_cursor()
+            logger.error(f"Failed to create mixed overlay: {e}", exc_info=True)
+            QMessageBox.critical(self, "Plot Error", f"Failed to create mixed overlay:\n\n{e}")
+            self.status_label.setText("Mixed overlay failed")
+
+    def _find_default_reference_wavelength(self, all_files: dict) -> float:
+        """Find wavelength of the strongest peak across all spectra."""
+        best_wl, best_val = 400.0, 0.0
+        for file_type, file_list in all_files.items():
+            for cn, f in file_list:
+                df = f.data
+                x = df.iloc[:, 0].values
+                y = np.mean(df.iloc[:, 1:].values, axis=1)
+                idx = np.argmax(np.abs(y))
+                if np.abs(y[idx]) > best_val:
+                    best_val = np.abs(y[idx])
+                    best_wl = float(x[idx])
+        return best_wl
 
     def closeEvent(self, event):
         """Handle application close event - full cleanup."""

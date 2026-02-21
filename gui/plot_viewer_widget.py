@@ -32,14 +32,17 @@ from utils.logger_config import get_logger
 logger = get_logger(__name__)
 
 
-def _fix_ylabel_horizontal(fig):
-    """Make all y-axis labels horizontal for readability."""
-    for ax in fig.get_axes():
+def _fix_ylabels(fig):
+    """Set standard 90-degree rotation on y-axis labels and align across subplots."""
+    axes = fig.get_axes()
+    for ax in axes:
         label = ax.yaxis.label
         if label.get_text():
-            label.set_rotation(0)
-            label.set_ha('right')
-            label.set_va('center')
+            label.set_rotation(90)
+            label.set_ha('center')
+            label.set_va('bottom')
+    if len(axes) > 1:
+        fig.align_ylabels(axes)
 
 
 def _savefig_with_style(fig, filename, fmt, canvas=None):
@@ -1186,7 +1189,7 @@ class PlotViewerWidget(QWidget):
             self.canvas.installEventFilter(self)
 
             # Horizontal y-axis labels
-            _fix_ylabel_horizontal(fig)
+            _fix_ylabels(fig)
 
             # Draw the canvas
             self.canvas.draw()
@@ -1226,14 +1229,15 @@ class PlotViewerWidget(QWidget):
     # Width bar handlers
     # -----------------------------------------------------------------
 
-    def _on_width_changed(self, max_px: int):
-        """Handle width preset change from PlotWidthBar."""
+    def _on_width_changed(self, pct: int):
+        """Handle width percentage change from PlotWidthBar."""
         if self.canvas is None:
             return
-        if max_px == 0:
+        if pct == 0:
             self.canvas.setMaximumWidth(16777215)  # QWIDGETSIZE_MAX — auto fill
         else:
-            self.canvas.setMaximumWidth(max_px)
+            parent_width = self.width()
+            self.canvas.setMaximumWidth(int(parent_width * pct / 100))
 
     def _on_dpi_changed(self, dpi: int):
         """Store export DPI on the current figure."""

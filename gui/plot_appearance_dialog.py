@@ -563,16 +563,20 @@ class PlotAppearanceDialog(QDialog):
                 ax.title.set_fontweight(title_weight)
             ax.xaxis.label.set_fontsize(axis_size)
             ax.yaxis.label.set_fontsize(axis_size)
-            # Keep y-axis labels horizontal
+            # Standard 90° y-axis labels
             if ax.yaxis.label.get_text():
-                ax.yaxis.label.set_rotation(0)
-                ax.yaxis.label.set_ha('right')
-                ax.yaxis.label.set_va('center')
+                ax.yaxis.label.set_rotation(90)
+                ax.yaxis.label.set_ha('center')
+                ax.yaxis.label.set_va('bottom')
             ax.tick_params(labelsize=tick_size)
             leg = ax.get_legend()
             if leg:
                 for t in leg.get_texts():
                     t.set_fontsize(legend_size)
+
+        # Align y-labels across subplots
+        if len(fig.get_axes()) > 1:
+            fig.align_ylabels(fig.get_axes())
 
         # --- Grid (explicit off then on to avoid toggle ambiguity) ---
         grid_on = self._grid_check.isChecked()
@@ -675,16 +679,20 @@ class PlotAppearanceDialog(QDialog):
                 ax.title.set_fontweight(sf['title_weight'])
             ax.xaxis.label.set_fontsize(sf['axis_size'])
             ax.yaxis.label.set_fontsize(sf['axis_size'])
-            # Keep y-axis labels horizontal
+            # Standard 90° y-axis labels
             if ax.yaxis.label.get_text():
-                ax.yaxis.label.set_rotation(0)
-                ax.yaxis.label.set_ha('right')
-                ax.yaxis.label.set_va('center')
+                ax.yaxis.label.set_rotation(90)
+                ax.yaxis.label.set_ha('center')
+                ax.yaxis.label.set_va('bottom')
             ax.tick_params(labelsize=sf['tick_size'])
             leg = ax.get_legend()
             if leg:
                 for t in leg.get_texts():
                     t.set_fontsize(sf['legend_size'])
+
+        # Align y-labels across subplots
+        if len(fig.get_axes()) > 1:
+            fig.align_ylabels(fig.get_axes())
 
         # --- Grid (explicit off then on) ---
         sg = self._snap_grid

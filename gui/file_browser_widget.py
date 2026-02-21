@@ -403,6 +403,34 @@ class FileBrowserWidget(QWidget):
 
         return selected
 
+    def get_selected_spectrum_items(self) -> dict:
+        """Return currently selected spectrum items for toolbar plotting.
+
+        Returns dict with:
+            'types': {'absorption': [names], 'fluorescence': [names], 'phosphorescence': [names]}
+            'mixed': True if multiple spectrum types selected
+        """
+        type_map = {
+            'abs_compound': 'absorption',
+            'fl_compound': 'fluorescence',
+            'ph_compound': 'phosphorescence',
+        }
+
+        types = {'absorption': [], 'fluorescence': [], 'phosphorescence': []}
+        for item in self.tree.selectedItems():
+            data = item.data(0, Qt.ItemDataRole.UserRole)
+            if not data:
+                continue
+            file_type = type_map.get(data.get('type'))
+            if file_type:
+                types[file_type].append(data.get('compound'))
+
+        active_types = {k: v for k, v in types.items() if v}
+        return {
+            'types': types,
+            'mixed': len(active_types) > 1,
+        }
+
     # ==================== DATA LOADING ====================
 
     def load_folder(self, folder_path: str):

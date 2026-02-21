@@ -286,7 +286,17 @@ class TransitionBasedSpikeDetector:
         """
         Calculate derivatives to find rapid changes in intensity.
         """
-        first_deriv = np.gradient(intensity)
+        # Replace NaN/Inf with interpolated values before derivative calculation
+        clean = intensity.copy()
+        bad = ~np.isfinite(clean)
+        if np.any(bad):
+            good = np.where(~bad)[0]
+            if len(good) > 1:
+                clean[bad] = np.interp(np.where(bad)[0], good, clean[good])
+            else:
+                clean[bad] = 0.0
+
+        first_deriv = np.gradient(clean)
         second_deriv = np.gradient(first_deriv)
         
         window_size = max(3, len(intensity) // 500)

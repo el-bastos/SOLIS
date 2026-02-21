@@ -1810,6 +1810,100 @@ class SOLISPlotter:
         logger.info("Spectral overlay plot created successfully")
         return fig
 
+    def plot_mixed_spectra_overlay_mpl(
+        self,
+        all_files: dict,
+        reference_wl: float = 420.0,
+        title: Optional[str] = None,
+    ) -> Figure:
+        """Plot normalized overlay of mixed spectrum types (Abs, FL, Ph).
+
+        Each spectrum is normalized to its nearest peak within ±100 nm
+        of the reference wavelength.
+
+        Parameters
+        ----------
+        all_files : dict
+            {file_type: [(compound_name, ParsedFile), ...]}
+        reference_wl : float
+            Reference wavelength (nm) for peak-based normalization.
+        """
+        s = self.style
+        fig = self._create_figure('spectrum_overlay', constrained_layout=True)
+        ax = fig.add_subplot(111)
+        export_data = {}
+
+        type_colors = {
+            'absorption': ['#000000', '#555555', '#999999'],
+            'fluorescence': ['#27ae60', '#2ecc71', '#1abc9c'],
+            'phosphorescence': ['#8e44ad', '#9b59b6', '#c39bd3'],
+        }
+        type_styles = {
+            'absorption': '-',
+            'fluorescence': '-',
+            'phosphorescence': '--',
+        }
+        type_labels = {
+            'absorption': 'Abs',
+            'fluorescence': 'FL',
+            'phosphorescence': 'Ph',
+        }
+
+        for file_type, file_list in all_files.items():
+            colors = type_colors.get(file_type, ['#333333'])
+            ls = type_styles.get(file_type, '-')
+            prefix = type_labels.get(file_type, file_type)
+
+            for i, (compound_name, parsed_file) in enumerate(file_list):
+                df = parsed_file.data
+                x = df.iloc[:, 0].values
+                y_cols = df.iloc[:, 1:].values
+                y = np.mean(y_cols, axis=1) if y_cols.shape[1] > 1 else y_cols[:, 0]
+
+                y_norm = self._normalize_to_peak(x, y, reference_wl, search_radius=100.0)
+
+                color = colors[i % len(colors)]
+                label = f'{prefix} \u2014 {compound_name}'
+                ax.plot(x, y_norm, color=color, linewidth=s.linewidth_fit,
+                        linestyle=ls, label=label)
+
+                export_data[f'Wavelength_nm_{prefix}_{compound_name}'] = x
+                export_data[f'{prefix}_norm_{compound_name}'] = y_norm
+
+        ax.set_xlabel('Wavelength (nm)', fontsize=s.font_size_axis_label)
+        ax.set_ylabel('Normalized Intensity', fontsize=s.font_size_axis_label)
+        ax.set_ylim(-0.05, 1.15)
+        ax.tick_params(axis='both', labelsize=s.font_size_tick_label)
+        s.configure_grid(ax)
+        ax.legend(loc='best', fontsize=s.font_size_legend)
+
+        if title is None:
+            type_parts = [type_labels.get(t, t) for t in all_files]
+            compounds = [cn for files in all_files.values() for cn, _ in files]
+            title = f'{" + ".join(type_parts)} Overlay: {", ".join(compounds[:3])}'
+            if len(compounds) > 3:
+                title += f' +{len(compounds) - 3} more'
+        fig.suptitle(title, fontsize=s.font_size_title, fontweight=s.font_weight_title)
+
+        fig.solis_export_data = export_data
+        logger.info("Mixed spectral overlay plot created successfully")
+        return fig
+
+    @staticmethod
+    def _normalize_to_peak(x, y, reference_wl, search_radius=100.0):
+        """Normalize y to the nearest local maximum within ±search_radius of reference_wl.
+
+        Falls back to global maximum if no data points found in range.
+        """
+        mask = (x >= reference_wl - search_radius) & (x <= reference_wl + search_radius)
+        if not np.any(mask):
+            peak_val = np.max(np.abs(y))
+            return y / peak_val if peak_val > 0 else y
+
+        y_region = y[mask]
+        peak_val = np.max(np.abs(y_region))
+        return y / peak_val if peak_val > 0 else y
+
 
 def wavelength_to_color(wavelength: float) -> str:
     """

@@ -18,11 +18,15 @@ A comprehensive PyQt6-based GUI application for analyzing singlet oxygen (¹O₂
   - Surplus method for partition analysis
   - Vesicle diffusion model with Numba-accelerated Monte Carlo simulations
   - Single-step grid search with presets (fast/medium/slow)
+- **Spectral Analysis**: Fluorescence (FL) and phosphorescence (Ph) spectral plotting
+  - Mixed spectrum overlay (Abs + FL + Ph) with peak-based normalization
 - **Interactive Plotting**: Publication-quality plots with Matplotlib
   - Embedded plot viewer with zoom, pan, and export tools
-  - PDF and CSV export for all plots
+  - Plot appearance customization (fonts, grid, colors, line widths)
+  - WYSIWYG export with adjustable canvas width and DPI
+  - SVG, PNG, PDF, and CSV export for all plots
 - **Session Management**: Save and load complete analysis sessions (.solis.json format)
-- **Export**: CSV export for all fitted parameters and plots
+- **Export**: CSV, SVG, PNG, and PDF export for all fitted parameters and plots
 - **Performance**:
   - Numba JIT compilation for fast simulations
   - Optimized algorithms (40-60% faster than previous versions)
@@ -141,15 +145,22 @@ INFO: DiffusionSimulatorNumba initialized (Numba JIT enabled)
 
 If you use SOLIS in your research, please cite:
 
+**Software:**
+
 ```bibtex
-@software{bastos2025solis,
+@software{bastos2026solis,
   author = {Bastos, Erick Leite},
   title = {SOLIS: Singlet Oxygen Luminescence Investigation System},
-  year = {2025},
-  version = {1.0.0},
-  url = {https://github.com/el-bastos/SOLIS}
+  year = {2026},
+  version = {1.1.0},
+  url = {https://github.com/el-bastos/SOLIS},
+  doi = {10.5281/zenodo.18475839}
 }
 ```
+
+**Related Publication:**
+
+Fernandez, H.; Junqueira, H. C.; Hess, L. F. S.; Sales, M. V. S.; Pinheiro, A. C.; Arruda, C.; Severino, D.; Hackbarth, S.; Quina, F. H.; Thomas, A. H.; Lorente, C.; Baptista, M. S.; Bastos, E. L. Standardized Workflows for Time-Resolved Singlet Oxygen Quantification in Aqueous Systems. *JACS Au* **2025**. DOI: [10.1021/jacsau.5c01463](https://doi.org/10.1021/jacsau.5c01463)
 
 ## License
 
@@ -178,6 +189,15 @@ Contributions are welcome! Please feel free to submit issues or pull requests.
 
 ## Recent Updates
 
+### February 2026 (v1.1.0)
+- **Spectral Analysis**: Fluorescence (FL) and phosphorescence (Ph) spectral plotting
+- **Mixed Spectrum Overlay**: Abs + FL + Ph overlay with user-selected peak-based normalization (±100 nm search)
+- **SVG/PNG Export**: Vector and raster export for all plot types
+- **Plot Appearance Dialog**: Customize fonts, grid, colors, and line widths for any plot
+- **WYSIWYG Export**: Percentage-based width control with DPI spinner (72–1200)
+- **Universal Toolbar Buttons**: Individual Plots / Plot Merged work for both spectra and kinetics
+- **Bug Fixes**: NaN tolerance in spike detector and surplus analyzer
+
 ### December 2025
 - **PyInstaller Fixes**: Added missing hiddenimports for PDF export
 - **Cross-Platform Verification**: Confirmed Linux and macOS compatibility
@@ -196,6 +216,15 @@ Contributions are welcome! Please feel free to submit issues or pull requests.
 - **Documentation**: Comprehensive codebase analysis and reorganization
 
 ## Version History
+
+- **1.1.0** (February 2026): Feature release
+  - Fluorescence and phosphorescence spectral analysis
+  - Mixed spectrum overlay with peak-based normalization
+  - SVG and PNG export for all plot types
+  - Plot Appearance dialog (fonts, grid, colors, line widths)
+  - WYSIWYG export with percentage width bar and DPI control
+  - Universal toolbar plot buttons
+  - NaN tolerance in spike detector and surplus analyzer
 
 - **1.0.0-beta** (December 2025): Beta release
   - Complete homogeneous and heterogeneous analysis
