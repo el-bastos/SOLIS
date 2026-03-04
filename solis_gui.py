@@ -53,8 +53,8 @@ class SOLISMainWindow(QMainWindow):
         # Plot viewers (floating windows)
         self.plot_viewers = {}  # {plot_id: PlotViewerWidget}
 
-        # Track which panel was last selected for universal plot buttons
-        self._last_plot_source = 'results'  # 'results' or 'browser'
+        # Track which panel was last focused for universal plot buttons
+        self._last_focused_panel = 'browser'  # 'browser' or 'results'
 
         # Plot operations log for session replay
         self.plot_operations = []  # List of plot operations to replay on session load
@@ -405,15 +405,41 @@ class SOLISMainWindow(QMainWindow):
         self.results_viewer.surplus_plot_requested.connect(self._on_surplus_plot_requested)
         self.results_viewer.heterogeneous_plot_requested.connect(self._on_heterogeneous_plot_requested)
 
-        # Track last-selected panel for universal plot buttons
-        self.file_browser.tree.itemSelectionChanged.connect(
-            lambda: setattr(self, '_last_plot_source', 'browser')
-        )
-        # Note: kinetics_tree is created lazily — connect in _connect_kinetics_tracking()
-        self._kinetics_tree_connected = False
+        # Track panel focus for universal plot buttons (focus-based dispatch)
+        self.file_browser.tree.installEventFilter(self)
+        self._kinetics_focus_connected = False  # kinetics_tree created lazily
 
         # Start with browser hidden (opens after loading data)
         self.data_browser_dock.hide()
+
+    def eventFilter(self, obj, event):
+        """Track which tree panel was last focused for toolbar dispatch."""
+        from PyQt6.QtCore import QEvent
+        if event.type() == QEvent.Type.FocusIn:
+            if obj is self.file_browser.tree:
+                self._on_panel_focused('browser')
+            elif (hasattr(self.results_viewer, 'kinetics_tree')
+                  and self.results_viewer.kinetics_tree is not None
+                  and obj is self.results_viewer.kinetics_tree):
+                self._on_panel_focused('results')
+        return super().eventFilter(obj, event)
+
+    def _on_panel_focused(self, panel: str):
+        """Update dispatch target and restyle trees (orange=active, gray=inactive)."""
+        if self._last_focused_panel == panel:
+            return
+        from gui.stylesheets import TREE_STYLE_ACTIVE, TREE_STYLE_INACTIVE
+        self._last_focused_panel = panel
+        if panel == 'browser':
+            self.file_browser.tree.setStyleSheet(TREE_STYLE_ACTIVE)
+            if (hasattr(self.results_viewer, 'kinetics_tree')
+                    and self.results_viewer.kinetics_tree is not None):
+                self.results_viewer.kinetics_tree.setStyleSheet(TREE_STYLE_INACTIVE)
+        else:
+            self.file_browser.tree.setStyleSheet(TREE_STYLE_INACTIVE)
+            if (hasattr(self.results_viewer, 'kinetics_tree')
+                    and self.results_viewer.kinetics_tree is not None):
+                self.results_viewer.kinetics_tree.setStyleSheet(TREE_STYLE_ACTIVE)
 
     def _on_result_item_clicked(self, result_type: str):
         """Handle result item click from file browser."""
@@ -1529,6 +1555,10 @@ class SOLISMainWindow(QMainWindow):
         self.toolbar_plot_merged_action.setEnabled(False)
         self._all_mean_selected = False
 
+        # Reset focus tracking
+        self._last_focused_panel = 'browser'
+        self._kinetics_focus_connected = False
+
         # Reset status bar
         self.status_label.setText("Session reset - Ready for new data")
         logger.info("Session reset complete")
@@ -1637,12 +1667,10 @@ class SOLISMainWindow(QMainWindow):
         # Auto-open Kinetics tab to show results
         self.results_viewer.open_result_tab('Kinetics')
 
-        # Connect kinetics_tree selection tracking (tree now exists)
-        if not self._kinetics_tree_connected and hasattr(self.results_viewer, 'kinetics_tree'):
-            self.results_viewer.kinetics_tree.itemSelectionChanged.connect(
-                lambda: setattr(self, '_last_plot_source', 'results')
-            )
-            self._kinetics_tree_connected = True
+        # Install focus tracking on kinetics_tree (tree now exists)
+        if not self._kinetics_focus_connected and hasattr(self.results_viewer, 'kinetics_tree'):
+            self.results_viewer.kinetics_tree.installEventFilter(self)
+            self._kinetics_focus_connected = True
 
         # Enable toolbar buttons and export action
         self.select_all_action.setEnabled(True)
@@ -3307,7 +3335,7 @@ class SOLISMainWindow(QMainWindow):
 
     def _on_toolbar_individual_plots(self):
         """Handle Individual Plots — dispatches based on last selection source."""
-        if self._last_plot_source == 'results':
+        if self._last_focused_panel == 'results':
             self._on_view_plot_from_kinetics()
             return
 
@@ -3325,7 +3353,7 @@ class SOLISMainWindow(QMainWindow):
 
     def _on_toolbar_plot_merged(self):
         """Handle Plot Merged — dispatches based on last selection source."""
-        if self._last_plot_source == 'results':
+        if self._last_focused_panel == 'results':
             self._on_plot_merged_from_kinetics()
             return
 

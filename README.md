@@ -195,7 +195,7 @@ Contributions are welcome! Please feel free to submit issues or pull requests.
 - **SVG/PNG Export**: Vector and raster export for all plot types
 - **Plot Appearance Dialog**: Customize fonts, grid, colors, and line widths for any plot
 - **WYSIWYG Export**: Percentage-based width control with DPI spinner (72–1200)
-- **Universal Toolbar Buttons**: Individual Plots / Plot Merged work for both spectra and kinetics
+- **Universal Toolbar Buttons**: Individual Plots / Plot Merged work for both spectra and kinetics, with focus-based panel dispatch and visual feedback (active panel = orange, inactive = gray)
 - **Bug Fixes**: NaN tolerance in spike detector and surplus analyzer
 
 ### December 2025
@@ -223,7 +223,7 @@ Contributions are welcome! Please feel free to submit issues or pull requests.
   - SVG and PNG export for all plot types
   - Plot Appearance dialog (fonts, grid, colors, line widths)
   - WYSIWYG export with percentage width bar and DPI control
-  - Universal toolbar plot buttons
+  - Universal toolbar plot buttons with focus-based panel dispatch
   - NaN tolerance in spike detector and surplus analyzer
 
 - **1.0.0-beta** (December 2025): Beta release

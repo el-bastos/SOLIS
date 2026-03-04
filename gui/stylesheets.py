@@ -31,6 +31,8 @@ INFO_TEXT = "#666666"     # Gray for info labels
 SECTION_BG = "#F0F0F0"    # Light gray for section headers
 BORDER_COLOR = "#999999"  # Border color for frames and widgets
 WHITE_BG = "#FFFFFF"      # White background
+INACTIVE_SELECTION_BG = "#D0D0D0"  # Light gray for unfocused panel selections
+INACTIVE_SELECTION_FG = "#333333"  # Dark gray text for unfocused selections
 
 
 # =============================================================================
@@ -55,6 +57,31 @@ TREE_STYLE = """
     QTreeWidget::item:selected:hover {
         background-color: #FFE4B5;
         color: black;
+    }
+"""
+
+# Active panel: orange selection (same as TREE_STYLE)
+TREE_STYLE_ACTIVE = TREE_STYLE
+
+# Inactive panel: gray selection (unfocused)
+TREE_STYLE_INACTIVE = """
+    QTreeWidget {
+        outline: none;
+    }
+    QTreeWidget::item {
+        background-color: transparent;
+    }
+    QTreeWidget::item:hover {
+        background-color: transparent;
+        border: none;
+    }
+    QTreeWidget::item:selected {
+        background-color: #D0D0D0;
+        color: #333333;
+    }
+    QTreeWidget::item:selected:hover {
+        background-color: #D0D0D0;
+        color: #333333;
     }
 """
 
